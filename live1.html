@@ -1,0 +1,637 @@
+
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Live Graph</title>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- STATUS ROW -->
+  <div class="status-row">
+    <div class="status-badge offline" id="statusBadge">
+      <span class="status-pulse"></span>
+      <span id="statusText">Connecting…</span>
+    </div>
+    <div class="time-badge" id="lastUpdated">--:--:--</div>
+  </div>
+
+  <!-- METRIC BUTTONS -->
+  <div class="metric-selector">
+    <button class="metric-btn active" id="btn-power"       onclick="selectMetric('power')">
+      <span class="btn-icon">⚡</span>Active Power
+    </button>
+    <button class="metric-btn"        id="btn-powerFactor" onclick="selectMetric('powerFactor')">
+      <span class="btn-icon">🔄</span>Power Factor
+    </button>
+    <button class="metric-btn"        id="btn-energy"      onclick="selectMetric('energy')">
+      <span class="btn-icon">🔋</span>Energy
+    </button>
+    <button class="metric-btn"        id="btn-voltage"     onclick="selectMetric('voltage')">
+      <span class="btn-icon">🔌</span>Voltage
+    </button>
+    <button class="metric-btn"        id="btn-current"     onclick="selectMetric('current')">
+      <span class="btn-icon">〰️</span>Current
+    </button>
+    <button class="metric-btn"        id="btn-frequency"   onclick="selectMetric('frequency')">
+      <span class="btn-icon">📡</span>Frequency
+    </button>
+    <button class="metric-btn metric-btn-bill" id="btn-bill" onclick="selectMetric('bill')">
+      <span class="btn-icon">💰</span>Calculated Bill (Rs.)
+    </button>
+  </div>
+
+  <!-- CHART CARD -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <span class="chart-title" id="chartTitle">Active Power</span>
+      <span class="chart-live-badge">
+        <span class="live-dot" id="liveDot"></span>
+        <span id="liveLabel"></span>
+      </span>
+    </div>
+    <div class="chart-value-strip">
+      <span class="chart-current-value" id="currentValue">--</span>
+      <span class="chart-current-unit"  id="currentUnit">W</span>
+    </div>
+    <div class="bill-notice" id="billNotice">
+      ⚠ Tariff settings not found — configure tariff rates to enable bill tracking.
+    </div>
+    <div class="chart-body" style="position:relative;">
+      <div class="live-chart" id="theChart"></div>
+
+      <!-- NO DATA OVERLAY -->
+      <div id="noDataOverlay" style="
+        display:none;
+        position:absolute;
+        inset:0;
+        background:rgba(255, 255, 255, 0.92);
+        border-radius:12px;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:10px;
+        z-index:10;
+      ">
+        <div style="
+          width:52px;height:52px;border-radius:50%;
+          background:#f3f4f6;
+          display:flex;align-items:center;justify-content:center;
+        ">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <p style="margin:0;font-size:15px;font-weight:500;color:#374151;">No live data</p>
+        <p style="margin:0;font-size:13px;color:#9ca3af;text-align:center;max-width:200px;">
+          Waiting for data from the device…
+        </p>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+console.log('[LIVE] Script started');
+
+// ════════════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════════════
+var API_BASE  = 'https://energy-app.utech-iiot.lk/api';
+var TB_USER   = 'demorris.boyd@forliion.com';
+var TB_PASS   = 'mydevice';
+var DEVICE_ID = '4d8d5ca0-2cc7-11f1-97e7-41e8209c1cc5';
+
+var METRIC_CONFIG = {
+  power:       { label:'Active Power',    unit:'W',   color:'#3b82f6', key:'power'       },
+  powerFactor: { label:'Power Factor',    unit:'PF',  color:'#22c55e', key:'powerFactor' },
+  energy:      { label:'Total Energy',    unit:'kWh', color:'#10b981', key:'energy'      },
+  voltage:     { label:'Voltage',         unit:'V',   color:'#f59e0b', key:'voltage'     },
+  current:     { label:'Current',         unit:'A',   color:'#ef4444', key:'current'     },
+  frequency:   { label:'Frequency',       unit:'Hz',  color:'#a855f7', key:'frequency'   },
+  bill:        { label:'Calculated Bill', unit:'Rs.', color:'#f59e0b', key:'bill'        }
+};
+
+var TELE_KEYS    = ['power','powerFactor','energy','voltage','current','frequency'];
+var ALL_KEYS     = TELE_KEYS.join(',');
+var MAX_POINTS   = 120;
+var POLL_MS      = 5000;
+var PRELOAD_MS   = 10 * 60 * 1000;
+var BILL_POLL_MS = 60000;
+
+// How many consecutive empty polls before showing the overlay
+var NO_DATA_THRESHOLD = 3;
+
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+var jwtToken           = null;
+var pollTimer          = null;
+var billRefreshTimer   = null;
+var chart              = null;
+var _activeMetric      = 'power';
+var _latestLoadedTs    = 0;
+var _tariffRates       = null;
+var _monthStartReading = null;
+var _cachedMonth       = -1;
+
+// No-data tracking
+var _emptyPollCount    = 0;
+var _noDataShown       = false;
+
+var buffers = {};
+TELE_KEYS.forEach(function(k){ buffers[k] = { times:[], values:[] }; });
+var billBuffer = { times:[], values:[] };
+
+// ════════════════════════════════════════════════════════════
+//  NO-DATA OVERLAY
+// ════════════════════════════════════════════════════════════
+function showNoDataOverlay(show){
+  var overlay = document.getElementById('noDataOverlay');
+  if(!overlay) return;
+  if(show === _noDataShown) return; // no change
+  _noDataShown = show;
+  overlay.style.display = show ? 'flex' : 'none';
+}
+
+// ════════════════════════════════════════════════════════════
+//  SIDEBAR
+// ════════════════════════════════════════════════════════════
+var sidebar       = document.getElementById('sidebar');
+var sidebarToggle = document.getElementById('sidebarToggle');
+var triggerArea   = document.querySelector('.sidebar-trigger-area');
+function toggleSidebar(){ if(sidebar) sidebar.classList.toggle('open'); }
+if(sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
+if(triggerArea)   triggerArea.addEventListener('click',   toggleSidebar);
+document.addEventListener('click', function(e){
+  if(sidebar && sidebar.classList.contains('open') &&
+     !sidebar.contains(e.target) && e.target!==sidebarToggle && e.target!==triggerArea)
+    sidebar.classList.remove('open');
+});
+
+// ════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════
+function fmtTime(tsMs){
+  var d=new Date(tsMs);
+  return String(d.getHours()).padStart(2,'0')+':'+
+         String(d.getMinutes()).padStart(2,'0')+':'+
+         String(d.getSeconds()).padStart(2,'0');
+}
+
+function pushToBuffer(buf, timeLabel, value){
+  buf.times.push(timeLabel);
+  buf.values.push(value);
+  if(buf.times.length > MAX_POINTS){ buf.times.shift(); buf.values.shift(); }
+}
+
+function setStatus(alive, msg){
+  var sb=document.getElementById('statusBadge'), st=document.getElementById('statusText');
+  var ld=document.getElementById('liveDot'),     ll=document.getElementById('liveLabel');
+  if(sb) sb.className = 'status-badge '+(alive?'online':'offline');
+  if(st) st.textContent = msg;
+  if(ld) ld.className  = 'live-dot'+(alive?'':' offline');
+  if(ll) ll.textContent= alive?'Live':'Offline';
+}
+
+function setLastUpdated(ts){
+  var el=document.getElementById('lastUpdated');
+  if(el) el.textContent = fmtTime(ts);
+}
+
+function getMonthStartMs(){
+  var n=new Date();
+  return new Date(n.getFullYear(), n.getMonth(), 1, 0, 0, 0, 0).getTime();
+}
+
+// ════════════════════════════════════════════════════════════
+//  BILL CALCULATION
+// ════════════════════════════════════════════════════════════
+function calculateBill(u, r){
+  if(!r || u===null || isNaN(u) || u<0) return null;
+  var ec=0, fc=0;
+  if     (u<=30)  { ec=r.e1*u;                                               fc=r.f1; }
+  else if(u<=60)  { ec=r.e1*30+r.e2*(u-30);                                 fc=r.f2; }
+  else if(u<=90)  { ec=r.e3*60+r.e4*(u-60);                                 fc=r.f4; }
+  else if(u<=120) { ec=r.e3*60+r.e4*30+r.e5*(u-90);                        fc=r.f5; }
+  else if(u<=180) { ec=r.e3*60+r.e4*30+r.e5*30+r.e6*(u-120);              fc=r.f6; }
+  else            { ec=r.e3*60+r.e4*30+r.e5*30+r.e6*60+r.e7*(u-180);      fc=r.f7; }
+  var s=ec+fc;
+  return s + s*((r.sscl||0)/100);
+}
+
+function pushBillPoint(timeLabel, currentEnergyReading){
+  if(!_tariffRates || _monthStartReading===null) return;
+  var units = Math.max(0, currentEnergyReading - _monthStartReading);
+  var bill  = calculateBill(units, _tariffRates);
+  if(bill===null) return;
+  pushToBuffer(billBuffer, timeLabel, parseFloat(bill.toFixed(2)));
+}
+
+// ════════════════════════════════════════════════════════════
+//  METRIC BUTTON SWITCH
+// ════════════════════════════════════════════════════════════
+function selectMetric(key){
+  if(!METRIC_CONFIG[key]) return;
+  _activeMetric = key;
+
+  var notice = document.getElementById('billNotice');
+  if(key==='bill' && !_tariffRates && notice) notice.style.display='block';
+  else if(notice) notice.style.display='none';
+
+  Object.keys(METRIC_CONFIG).forEach(function(k){
+    var btn=document.getElementById('btn-'+k);
+    if(btn) btn.classList.toggle('active', k===key);
+  });
+
+  var cfg=METRIC_CONFIG[key];
+  var titleEl=document.getElementById('chartTitle');
+  var unitEl =document.getElementById('currentUnit');
+  if(titleEl) titleEl.textContent = cfg.label;
+  if(unitEl)  unitEl.textContent  = cfg.unit;
+
+  var buf   = (key==='bill') ? billBuffer : buffers[key];
+  var valEl = document.getElementById('currentValue');
+  if(valEl) valEl.textContent = buf.values.length > 0 ? buf.values[buf.values.length-1] : '--';
+
+  // Show overlay if this metric has no data points
+  showNoDataOverlay(buf.values.length === 0);
+
+  renderChart(key);
+}
+
+// ════════════════════════════════════════════════════════════
+//  ECHARTS
+// ════════════════════════════════════════════════════════════
+function makeOption(key){
+  var cfg = METRIC_CONFIG[key];
+  var buf = (key==='bill') ? billBuffer : buffers[key];
+  return {
+    backgroundColor: 'transparent',
+    grid: { left:52, right:8, top:12, bottom:38, containLabel:false },
+    tooltip: {
+      trigger:'axis',
+      formatter: function(p){
+        if(!p||!p[0]) return '';
+        var prefix = key==='bill' ? 'Rs. ' : '';
+        return p[0].name+'<br/><b>'+prefix+p[0].value+' '+cfg.unit+'</b>';
+      }
+    },
+    xAxis:{
+      type:'category', data:buf.times, boundaryGap:false,
+      axisLabel:{ color:'#999', fontSize:9, rotate:30, interval:'auto' },
+      axisLine:{ lineStyle:{ color:'#e4e0f8' } },
+      axisTick:{ show:false }, splitLine:{ show:false }
+    },
+    yAxis:{
+      type:'value',
+      axisLabel:{
+        color:'#999', fontSize:9,
+        formatter: key==='bill' ? function(v){ return 'Rs.'+v; } : undefined
+      },
+      axisLine:{ show:false }, axisTick:{ show:false },
+      splitLine:{ lineStyle:{ color:'#f0eef9', type:'dashed' } }
+    },
+    series:[{
+      type:'line', data:buf.values, smooth:0.4, symbol:'none',
+      lineStyle:{ color:cfg.color, width:2.5 },
+      areaStyle:{
+        color:{
+          type:'linear', x:0, y:0, x2:0, y2:1,
+          colorStops:[
+            { offset:0, color:cfg.color+'40' },
+            { offset:1, color:cfg.color+'00' }
+          ]
+        }
+      }
+    }]
+  };
+}
+
+function renderChart(key){
+  var dom=document.getElementById('theChart');
+  if(!dom || typeof echarts==='undefined') return;
+  if(!chart){ chart=echarts.init(dom); }
+  chart.setOption(makeOption(key), true);
+}
+
+function updateActiveChart(){
+  if(!chart) return;
+  var key = _activeMetric;
+  var buf = (key==='bill') ? billBuffer : buffers[key];
+
+  chart.setOption({
+    xAxis:  [{ data: buf.times  }],
+    series: [{ data: buf.values }]
+  });
+
+  var valEl=document.getElementById('currentValue');
+  if(valEl && buf.values.length > 0)
+    valEl.textContent = buf.values[buf.values.length-1];
+
+  // Update overlay based on whether active buffer has data
+  showNoDataOverlay(buf.values.length === 0);
+}
+
+// ════════════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════════════
+function getJwtToken(callback){
+  fetch(API_BASE+'/auth/login',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:TB_USER, password:TB_PASS})
+  })
+  .then(function(r){ if(!r.ok) throw new Error('Login '+r.status); return r.json(); })
+  .then(function(d){ jwtToken=d.token; callback(true); })
+  .catch(function(e){ console.error('[AUTH]',e.message); callback(false); });
+}
+
+// ════════════════════════════════════════════════════════════
+//  TARIFF RATES
+// ════════════════════════════════════════════════════════════
+function loadTariffRates(callback){
+  if(_tariffRates){ callback(true); return; }
+
+  var keys=['tariff_e1','tariff_f1','tariff_e2','tariff_f2','tariff_e3','tariff_f3',
+    'tariff_e4','tariff_f4','tariff_e5','tariff_f5','tariff_e6','tariff_f6',
+    'tariff_e7','tariff_f7','tariff_sscl'].join(',');
+
+  fetch(API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/attributes/SHARED_SCOPE?keys='+keys,
+    {headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(function(list){
+    var m={};
+    list.forEach(function(i){ if(i.key) m[i.key]=parseFloat(i.value); });
+    if(isNaN(m.tariff_e1)){ console.warn('[TARIFF] No rates'); callback(false); return; }
+    _tariffRates={
+      e1:m.tariff_e1,               f1:m.tariff_f1||0,
+      e2:m.tariff_e2||m.tariff_e1,  f2:m.tariff_f2||0,
+      e3:m.tariff_e3||m.tariff_e2,  f3:m.tariff_f3||0,
+      e4:m.tariff_e4||m.tariff_e3,  f4:m.tariff_f4||0,
+      e5:m.tariff_e5||m.tariff_e4,  f5:m.tariff_f5||0,
+      e6:m.tariff_e6||m.tariff_e5,  f6:m.tariff_f6||0,
+      e7:m.tariff_e7||m.tariff_e6,  f7:m.tariff_f7||0,
+      sscl: isNaN(m.tariff_sscl) ? 0 : m.tariff_sscl
+    };
+    console.log('[TARIFF] Loaded OK');
+    callback(true);
+  })
+  .catch(function(e){ console.error('[TARIFF]',e.message); callback(false); });
+}
+
+// ════════════════════════════════════════════════════════════
+//  MONTH-START ENERGY READING
+// ════════════════════════════════════════════════════════════
+function loadMonthStartReading(callback){
+  var now=Date.now(), cm=new Date().getMonth(), ms=getMonthStartMs();
+  if(_cachedMonth===cm && _monthStartReading!==null){ callback(); return; }
+
+  _cachedMonth=cm; _monthStartReading=null;
+
+  var urlNarrow=API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/timeseries?keys=energy'
+    +'&startTs='+ms+'&endTs='+(ms+7200000)
+    +'&limit=1&agg=NONE&orderBy=ASC';
+
+  fetch(urlNarrow,{headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var rows=(d.energy&&d.energy.length)?d.energy:[];
+    if(rows.length){ return d; }
+    var urlWide=API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+      +'/values/timeseries?keys=energy'
+      +'&startTs='+ms+'&endTs='+now
+      +'&limit=1&agg=NONE&orderBy=ASC';
+    return fetch(urlWide,{headers:{'X-Authorization':'Bearer '+jwtToken}}).then(function(r2){return r2.json();});
+  })
+  .then(function(d){
+    var rows=(d.energy&&d.energy.length)?d.energy:[];
+    if(rows.length){
+      _monthStartReading=parseFloat(rows[0].value);
+      console.log('[BILL] Month-start reading: '+_monthStartReading+' kWh');
+    } else {
+      console.warn('[BILL] No month-start energy reading found');
+    }
+    callback();
+  })
+  .catch(function(e){ console.error('[BILL] month-start:',e.message); callback(); });
+}
+
+// ════════════════════════════════════════════════════════════
+//  PROCESS RAW RESPONSE
+// ════════════════════════════════════════════════════════════
+function processRaw(raw, onlyAfterTs){
+  if(!raw) return false;
+  onlyAfterTs=onlyAfterTs||0;
+  var gotData=false;
+
+  var tsMap={};
+  TELE_KEYS.forEach(function(k){
+    var entries=raw[k];
+    if(!entries||!entries.length) return;
+    entries.forEach(function(entry){
+      if(entry.ts<=onlyAfterTs) return;
+      if(!tsMap[entry.ts]) tsMap[entry.ts]={};
+      tsMap[entry.ts][k]=parseFloat(entry.value);
+    });
+  });
+
+  var tsList=Object.keys(tsMap).map(Number).sort(function(a,b){return a-b;});
+
+  tsList.forEach(function(ts){
+    var vals=tsMap[ts];
+    var timeLabel=fmtTime(ts);
+
+    TELE_KEYS.forEach(function(k){
+      if(vals[k]===undefined||isNaN(vals[k])) return;
+      pushToBuffer(buffers[k], timeLabel, parseFloat(vals[k].toFixed(3)));
+      gotData=true;
+    });
+
+    if(vals['energy']!==undefined && !isNaN(vals['energy'])){
+      pushBillPoint(timeLabel, vals['energy']);
+    }
+
+    if(ts>_latestLoadedTs) _latestLoadedTs=ts;
+  });
+
+  return gotData;
+}
+
+// ════════════════════════════════════════════════════════════
+//  PRELOAD
+// ════════════════════════════════════════════════════════════
+function preloadHistory(callback){
+  var endTs=Date.now(), startTs=endTs-PRELOAD_MS;
+
+  var url=API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/timeseries'
+    +'?keys='+ALL_KEYS
+    +'&startTs='+startTs+'&endTs='+endTs
+    +'&limit=100&agg=NONE&orderBy=ASC';
+
+  console.log('[PRELOAD] Fetching last 10 min…');
+  setStatus(false,'Loading history…');
+
+  fetch(url,{headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){
+    if(r.status===401){
+      jwtToken=null; getJwtToken(function(ok){ if(ok) preloadHistory(callback); else callback(false); });
+      return null;
+    }
+    if(!r.ok) throw new Error('Preload '+r.status);
+    return r.json();
+  })
+  .then(function(raw){
+    if(!raw) return;
+    var gotData = processRaw(raw,0);
+    console.log('[PRELOAD] Done. latestTs:', new Date(_latestLoadedTs).toLocaleTimeString());
+    renderChart(_activeMetric);
+    updateActiveChart();
+    if(_latestLoadedTs>0) setLastUpdated(_latestLoadedTs);
+
+    if(gotData){
+      _emptyPollCount = 0;
+      showNoDataOverlay(false);
+      setStatus(true,'History loaded');
+    } else {
+      // No historical data — show overlay immediately
+      showNoDataOverlay(true);
+      setStatus(false,'No data available');
+    }
+    callback(true);
+  })
+  .catch(function(e){
+    console.error('[PRELOAD]',e.message);
+    showNoDataOverlay(true);
+    setStatus(false,'History failed — going live');
+    callback(false);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  LIVE POLL — every 5s
+// ════════════════════════════════════════════════════════════
+function fetchAndPoll(){
+  var endTs=Date.now(), startTs=endTs-120000;
+
+  var url=API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/timeseries'
+    +'?keys='+ALL_KEYS
+    +'&startTs='+startTs+'&endTs='+endTs
+    +'&useStrictDataTypes=false&limit=1';
+
+  fetch(url,{headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){
+    if(r.status===401){
+      jwtToken=null; setStatus(false,'Re-authenticating…');
+      getJwtToken(function(ok){ if(ok) fetchAndPoll(); else setStatus(false,'Auth error'); });
+      return null;
+    }
+    if(!r.ok) throw new Error('API '+r.status);
+    return r.json();
+  })
+  .then(function(raw){
+    if(!raw) return;
+    var gotData=processRaw(raw,_latestLoadedTs);
+    if(gotData){
+      _emptyPollCount = 0;
+      showNoDataOverlay(false);
+      updateActiveChart();
+      setLastUpdated(_latestLoadedTs);
+      setStatus(true,'Active');
+    } else {
+      _emptyPollCount++;
+      setStatus(true,'Active');
+      // Show overlay after N consecutive empty polls
+      if(_emptyPollCount >= NO_DATA_THRESHOLD){
+        showNoDataOverlay(true);
+      }
+    }
+  })
+  .catch(function(e){
+    console.error('[FETCH]',e.message);
+    _emptyPollCount++;
+    if(_emptyPollCount >= NO_DATA_THRESHOLD){
+      showNoDataOverlay(true);
+    }
+    setStatus(false,'Inactive');
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  ECHARTS LOADER
+// ════════════════════════════════════════════════════════════
+function loadECharts(callback){
+  if(typeof echarts!=='undefined'){ callback(); return; }
+  var s=document.createElement('script');
+  s.src='https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js';
+  s.onload=function(){ console.log('[ECHARTS] Loaded'); callback(); };
+  s.onerror=function(){ setStatus(false,'Failed to load chart library'); };
+  document.head.appendChild(s);
+}
+
+// ════════════════════════════════════════════════════════════
+//  STARTUP
+// ════════════════════════════════════════════════════════════
+function startWidget(){
+  if(pollTimer!==null){ console.warn('[INIT] Already started.'); return; }
+  console.log('[INIT] startWidget()');
+  setStatus(false,'Initialising…');
+
+  // Show overlay while loading
+  showNoDataOverlay(true);
+
+  loadECharts(function(){
+    setStatus(false,'Authenticating…');
+
+    getJwtToken(function(ok){
+      if(!ok){ setStatus(false,'Authentication failed.'); return; }
+      console.log('[INIT] Auth OK');
+
+      var tariffDone=false, monthDone=false;
+      function onBothReady(){
+        if(!tariffDone||!monthDone) return;
+        preloadHistory(function(){
+          fetchAndPoll();
+          pollTimer=setInterval(fetchAndPoll, POLL_MS);
+          billRefreshTimer=setInterval(function(){
+            loadMonthStartReading(function(){});
+          }, BILL_POLL_MS);
+          console.log('[INIT] Live poll started');
+        });
+      }
+
+      loadTariffRates(function(){ tariffDone=true; onBothReady(); });
+      loadMonthStartReading(function(){ monthDone=true; onBothReady(); });
+    });
+  });
+
+  window.addEventListener('resize', function(){ if(chart) chart.resize(); });
+}
+
+self.onInit=function(){ startWidget(); };
+self.onDestroy=function(){
+  if(pollTimer)       { clearInterval(pollTimer);       pollTimer=null; }
+  if(billRefreshTimer){ clearInterval(billRefreshTimer); billRefreshTimer=null; }
+  if(chart)           { chart.dispose(); chart=null; }
+};
+
+setTimeout(function(){ if(pollTimer!==null) return; startWidget(); }, 100);
+console.log('[LIVE] Script parsed.');
+
+// Hide ThingsBoard watermark
+function hide() {
+  var el = document.querySelector('section.tb-powered-by-footer');
+  if (el) { el.style.display = 'none'; }
+  else { setTimeout(hide, 500); }
+}
+hide();
+</script>
+</body>
+</html>

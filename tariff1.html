@@ -1,0 +1,582 @@
+<title>Tariff - Settings</title>
+<div class="sidebar-trigger-area" title="Toggle Sidebar"></div>
+
+<!--<nav id="sidebar">-->
+ 
+<!--  <ul>-->
+<!--    <li><a id="index">Home</a></li>-->
+<!--    <li><a id="tariff">Tariff Settings</a></li>-->
+<!--    <li><a id="history">History</a></li>-->
+<!--    <li><a id="live">Live Graph</a></li>-->
+<!--    <li><a id="terms">Terms & Support</a></li>-->
+<!--  </ul>-->
+<!--</nav>-->
+
+
+
+<div class="container">
+
+  <!-- ══ TAB ROW ══════════════════════════════════════════ -->
+  <div class="tab-row">
+    <button class="tab-btn" id="tab-current" onclick="switchTab('current')">
+      Current Settings
+    </button>
+    <button class="tab-btn" id="tab-tariff" onclick="switchTab('tariff')">
+      Tariff Settings
+    </button>
+    <button class="tab-btn" id="tab-bill" onclick="switchTab('bill')">
+      Bill Calculator
+    </button>
+  </div>
+
+  <!-- ══ PANEL 1: CURRENT SETTINGS (default) ══════════════ -->
+  <div class="tab-panel" id="panel-current">
+
+    <div class="section-card">
+      <div class="section-header">Current Tariff Rates</div>
+      <div class="section-body">
+        <table class="display-table" id="tariffTable">
+          <thead>
+            <tr>
+              <th>Consumption Block</th>
+              <th>Energy (Rs./kWh)</th>
+              <th>Fixed (Rs./mo)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="3" style="text-align:center;padding:18px;color:#aaa;font-size:0.8rem;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /panel-current -->
+
+  <!-- ══ PANEL 2: TARIFF SETTINGS ═════════════════════════ -->
+  <div class="tab-panel" id="panel-tariff">
+    <form id="tariffForm" novalidate>
+
+      <!-- Block: 0–60 kWh/month -->
+      <div class="section-card">
+        <div class="section-header">Consumption ≤ 60 kWh / month</div>
+        <div class="section-body">
+          <table class="tariff-table">
+            <thead>
+              <tr>
+                <th>Block</th>
+                <th>Energy Charge (Rs./kWh)</th>
+                <th>Fixed Charge (Rs./mo)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>0 – 30 kWh</td>
+                <td><input type="number" step="0.01" id="e1" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f1" placeholder="0.00" required /></td>
+              </tr>
+              <tr>
+                <td>31 – 60 kWh</td>
+                <td><input type="number" step="0.01" id="e2" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f2" placeholder="0.00" required /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Block: above 60 kWh/month -->
+      <div class="section-card">
+        <div class="section-header">Consumption &gt; 60 kWh / month</div>
+        <div class="section-body">
+          <table class="tariff-table">
+            <thead>
+              <tr>
+                <th>Block</th>
+                <th>Energy Charge (Rs./kWh)</th>
+                <th>Fixed Charge (Rs./mo)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>0 – 60 kWh</td>
+                <td><input type="number" step="0.01" id="e3" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f3" placeholder="0.00" required /></td>
+              </tr>
+              <tr>
+                <td>61 – 90 kWh</td>
+                <td><input type="number" step="0.01" id="e4" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f4" placeholder="0.00" required /></td>
+              </tr>
+              <tr>
+                <td>91 – 120 kWh</td>
+                <td><input type="number" step="0.01" id="e5" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f5" placeholder="0.00" required /></td>
+              </tr>
+              <tr>
+                <td>121 – 180 kWh</td>
+                <td><input type="number" step="0.01" id="e6" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f6" placeholder="0.00" required /></td>
+              </tr>
+              <tr>
+                <td>181 kWh +</td>
+                <td><input type="number" step="0.01" id="e7" placeholder="0.00" required /></td>
+                <td><input type="number" step="0.01" id="f7" placeholder="0.00" required /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Additional settings -->
+      <div class="section-card">
+        <div class="section-header">Additional Settings</div>
+        <div class="section-body">
+          <div class="single-input-row">
+            <span class="single-input-label">SSCL Rate (%)</span>
+            <input type="number" step="0.01" id="sscl" placeholder="e.g. 2.5" />
+          </div>
+          <div class="single-input-row">
+            <span class="single-input-label">Energy Budget (Rs./month)</span>
+            <input type="number" step="0.01" id="eb" placeholder="e.g. 2000" />
+          </div>
+          <div class="single-input-row">
+            <span class="single-input-label">Max Energy Threshold (kWh)</span>
+            <input type="number" step="0.01" id="mx" placeholder="e.g. 150" />
+          </div>
+          <div class="single-input-row">
+            <span class="single-input-label">Gauge Max Value (W)</span>
+            <input type="number" step="0.01" id="mxg" placeholder="e.g. 3000" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Save / Update buttons -->
+      <div class="btn-row">
+        <button type="submit" class="btn-primary" id="btnSave">Save Settings</button>
+        <button type="button" class="btn-primary" id="btnUpdate" style="display:none;">Update Settings</button>
+      </div>
+
+    </form>
+  </div><!-- /panel-tariff -->
+
+  <!-- ══ PANEL 3: BILL CALCULATOR ═════════════════════════ -->
+  <div class="tab-panel" id="panel-bill">
+
+    <div class="section-card">
+      <div class="section-header">Select Date Range</div>
+      <div class="section-body">
+        <div class="date-row">
+          <div class="date-field">
+            <label for="startDate">From</label>
+            <input type="date" id="startDate" />
+          </div>
+          <div class="date-field">
+            <label for="endDate">To</label>
+            <input type="date" id="endDate" />
+          </div>
+        </div>
+        <div class="calc-btn-wrap">
+          <button type="button" class="btn-primary" id="btnCalcBill">Calculate Bill</button>
+        </div>
+        <div id="fetchStatus"></div>
+      </div>
+    </div>
+
+    <!-- Bill result display -->
+    <div class="bill-result" id="billResultCard">
+      <div class="bill-result-label">Calculated Bill</div>
+      <div class="bill-result-value" id="tb">Rs. ---</div>
+    </div>
+
+    <!-- Breakdown table -->
+    <div class="section-card" id="resultTableCard" style="display:none;">
+      <div class="section-header">Bill Breakdown</div>
+      <div class="section-body">
+        <table class="result-table" id="resultTable">
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div><!-- /panel-bill -->
+
+</div><!-- /container -->
+
+<script>
+// ════════════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════════════
+var API_BASE  = 'https://energy-app.utech-iiot.lk/api';
+var TB_USER   = 'demorris.boyd@forliion.com';
+var TB_PASS   = 'mydevice';
+var DEVICE_ID = '4d8d5ca0-2cc7-11f1-97e7-41e8209c1cc5';
+
+var ALL_KEYS = [
+  'e1','f1','e2','f2','e3','f3','e4','f4',
+  'e5','f5','e6','f6','e7','f7','sscl','eb','mx','mxg'
+];
+
+var _cachedRates = null;
+var _token       = null;
+
+// ════════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ════════════════════════════════════════════════════════════
+function switchTab(name) {
+  ['current','tariff','bill'].forEach(function(t) {
+    document.getElementById('tab-'+t).classList.toggle('active', t===name);
+    document.getElementById('panel-'+t).classList.toggle('active', t===name);
+  });
+}
+
+
+
+// ════════════════════════════════════════════════════════════
+//  TOKEN
+// ════════════════════════════════════════════════════════════
+async function getToken() {
+  if (_token) return _token;
+  var res = await fetch(API_BASE+'/auth/login', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({username:TB_USER, password:TB_PASS}),
+  });
+  if (!res.ok) throw new Error('Login failed: '+res.status);
+  _token = (await res.json()).token;
+  return _token;
+}
+
+// ════════════════════════════════════════════════════════════
+//  THINGSBOARD ATTRIBUTE HELPERS
+// ════════════════════════════════════════════════════════════
+async function saveAttributesToTB(v) {
+  var token   = await getToken();
+  var payload = {};
+  ALL_KEYS.forEach(function(k){ if(v[k]!==undefined) payload['tariff_'+k]=v[k]; });
+  var res = await fetch(
+    API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID+'/attributes/SHARED_SCOPE',
+    { method:'POST', headers:{'Content-Type':'application/json','X-Authorization':'Bearer '+token},
+      body: JSON.stringify(payload) }
+  );
+  if (!res.ok) throw new Error('Save failed: '+res.status);
+}
+
+async function loadAttributesFromTB() {
+  var token = await getToken();
+  var keys  = ALL_KEYS.map(function(k){ return 'tariff_'+k; }).join(',');
+  var res   = await fetch(
+    API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID+'/values/attributes/SHARED_SCOPE?keys='+keys,
+    { headers:{'X-Authorization':'Bearer '+token} }
+  );
+  if (!res.ok) throw new Error('Load failed: '+res.status);
+  var list = await res.json();
+  var map  = {};
+  list.forEach(function(item){ if(item.key!==undefined) map[item.key]=item.value; });
+  var v = {};
+  ALL_KEYS.forEach(function(k){
+    var raw = map['tariff_'+k];
+    v[k] = (raw!==undefined&&raw!==null&&raw!=='') ? parseFloat(raw) : undefined;
+  });
+  return v;
+}
+
+// ════════════════════════════════════════════════════════════
+//  FETCH ENERGY FOR RANGE
+// ════════════════════════════════════════════════════════════
+async function fetchEnergyForRange(startMs, endMs) {
+  var token = await getToken();
+  var base  = API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID+'/values/timeseries';
+  setFetchStatus('Fetching energy readings…');
+
+  var resFirst = await fetch(base+'?keys=energy&startTs='+startMs+'&endTs='+endMs+'&limit=1&agg=NONE&orderBy=ASC',
+    {headers:{'X-Authorization':'Bearer '+token}});
+  if (!resFirst.ok) throw new Error('Energy fetch failed: '+resFirst.status);
+  var df = await resFirst.json();
+  var rf = (df.energy&&df.energy.length>0)?df.energy:[];
+  if (!rf.length) throw new Error('No energy data found at start of range.');
+  var startReading=parseFloat(rf[0].value), startTs=rf[0].ts;
+
+  var resLast = await fetch(base+'?keys=energy&startTs='+startMs+'&endTs='+endMs+'&limit=1&agg=NONE&orderBy=DESC',
+    {headers:{'X-Authorization':'Bearer '+token}});
+  if (!resLast.ok) throw new Error('Energy fetch failed: '+resLast.status);
+  var dl = await resLast.json();
+  var rl = (dl.energy&&dl.energy.length>0)?dl.energy:[];
+  if (!rl.length) throw new Error('No energy data found at end of range.');
+  var endReading=parseFloat(rl[0].value), endTs=rl[0].ts;
+
+  if (endReading<startReading) throw new Error(
+    'End reading ('+endReading.toFixed(3)+' kWh) < start reading ('+startReading.toFixed(3)+' kWh). Meter may have reset.');
+
+  setFetchStatus('');
+  return { units:endReading-startReading, startReading, endReading, startTs, endTs };
+}
+
+function setFetchStatus(msg){
+  var el=document.getElementById('fetchStatus'); if(el) el.textContent=msg;
+}
+
+// ════════════════════════════════════════════════════════════
+//  FORM HELPERS
+// ════════════════════════════════════════════════════════════
+function readFormValues(){
+  var v={};
+  ALL_KEYS.forEach(function(k){
+    var el=document.getElementById(k);
+    v[k]=(el&&el.value!=='')?parseFloat(el.value):undefined;
+  });
+  return v;
+}
+function fillForm(v){
+  ALL_KEYS.forEach(function(k){
+    var el=document.getElementById(k);
+    if(el&&v[k]!==undefined&&!isNaN(v[k])) el.value=v[k];
+  });
+}
+function setButtonMode(mode){
+  document.getElementById('btnSave').style.display   = mode==='save'   ?'block':'none';
+  document.getElementById('btnUpdate').style.display = mode==='update' ?'block':'none';
+}
+function validateForm(v){
+  var req=['e1','f1','e2','f2','e3','f3','e4','f4','e5','f5','e6','f6','e7','f7'];
+  return req.filter(function(k){ return v[k]===undefined||isNaN(v[k]); });
+}
+function setDefaultDates(){
+  var today=new Date(), first=new Date(today.getFullYear(),today.getMonth(),1);
+  function fmt(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+  document.getElementById('startDate').value=fmt(first);
+  document.getElementById('endDate').value=fmt(today);
+}
+
+// ════════════════════════════════════════════════════════════
+//  BILL CALCULATION
+// ════════════════════════════════════════════════════════════
+function calculateBill(u,r){
+  var ec=0,fc=0;
+  if      (u<=30)  {ec=r.e1*u;                                               fc=r.f1;}
+  else if (u<=60)  {ec=r.e1*30+r.e2*(u-30);                                  fc=r.f2;}
+  else if (u<=90)  {ec=r.e3*60+r.e4*(u-60);                                  fc=r.f4;}
+  else if (u<=120) {ec=r.e3*60+r.e4*30+r.e5*(u-90);                          fc=r.f5;}
+  else if (u<=180) {ec=r.e3*60+r.e4*30+r.e5*30+r.e6*(u-120);                fc=r.f6;}
+  else             {ec=r.e3*60+r.e4*30+r.e5*30+r.e6*60+r.e7*(u-180);        fc=r.f7;}
+  var sub=ec+fc, sscl=sub*((r.sscl||0)/100);
+  return {energyCharge:ec,fixedCharge:fc,subtotal:sub,ssclAmount:sscl,total:sub+sscl};
+}
+
+// ════════════════════════════════════════════════════════════
+//  POPULATE CURRENT SETTINGS TABLE
+// ════════════════════════════════════════════════════════════
+function fmt(val){ return (val!==undefined&&val!==null&&!isNaN(val))?Number(val).toFixed(2):'—'; }
+
+function populateTariffTable(v){
+  var tbody=document.querySelector('#tariffTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML='';
+  [
+    ['0 – 30 kWh ',      v.e1,v.f1],
+    ['31 – 60 kWh ',     v.e2,v.f2],
+    ['0 – 60 kWh ',      v.e3,v.f3],
+    ['61 – 90 kWh ',     v.e4,v.f4],
+    ['91 – 120 kWh ',    v.e5,v.f5],
+    ['121 – 180 kWh ',   v.e6,v.f6],
+    ['181 kWh + ',       v.e7,v.f7],
+  ].forEach(function(row){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+row[0]+'</td><td>'+fmt(row[1])+'</td><td>'+fmt(row[2])+'</td>';
+    tbody.appendChild(tr);
+  });
+  // Extra rows for SSCL, budget, max
+  [
+    ['SSCL Rate',         fmt(v.sscl)+'%', '—'],
+    ['Energy Budget',     '—',             'Rs. '+fmt(v.eb)+'/mo'],
+    ['Max Energy',        '—',             fmt(v.mx)+' kWh'],
+    ['Gauge Max',         '—',             fmt(v.mxg)+' W'],
+  ].forEach(function(row){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+row[0]+'</td><td>'+row[1]+'</td><td>'+row[2]+'</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  POPULATE RESULT TABLE
+// ════════════════════════════════════════════════════════════
+function populateResultTable(bill,info){
+  var card=document.getElementById('resultTableCard');
+  var tbody=document.querySelector('#resultTable tbody');
+  if(!tbody) return;
+  tbody.innerHTML='';
+  [
+    ['Start Reading', info.startReading.toFixed(2)+' kWh'],
+    ['End Reading',   info.endReading.toFixed(2)+' kWh'],
+    ['Units Consumed',info.units.toFixed(3)+' kWh'],
+    ['Energy Charge', 'Rs. '+bill.energyCharge.toFixed(2)],
+    ['Fixed Charge',  'Rs. '+bill.fixedCharge.toFixed(2)],
+    ['Sub-Total',     'Rs. '+bill.subtotal.toFixed(2)],
+    ['SSCL Amount',   'Rs. '+bill.ssclAmount.toFixed(2)],
+    ['Total Bill',    'Rs. '+bill.total.toFixed(2)],
+  ].forEach(function(row){
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td>'+row[0]+'</td><td>'+row[1]+'</td>';
+    tbody.appendChild(tr);
+  });
+  if(card) card.style.display='block';
+}
+
+// ════════════════════════════════════════════════════════════
+//  CALCULATE BILL FOR RANGE
+// ════════════════════════════════════════════════════════════
+async function calculateBillForRange(){
+  var sv=document.getElementById('startDate').value;
+  var ev=document.getElementById('endDate').value;
+  var tbEl=document.getElementById('tb');
+  var card=document.getElementById('resultTableCard');
+
+  if(!sv||!ev){ showToast('Please select both dates.','error'); return; }
+  var startMs=new Date(sv+'T00:00:00').getTime();
+  var endMs  =new Date(ev+'T23:59:59').getTime();
+  if(startMs>=endMs){ showToast('End date must be after start date.','error'); return; }
+  if(!_cachedRates){ showToast('Tariff rates not loaded yet.','warning'); return; }
+
+  setLoading(true);
+  if(tbEl) tbEl.textContent='Calculating…';
+  if(card) card.style.display='none';
+
+  try {
+    var result=await fetchEnergyForRange(startMs,endMs);
+    var bill=calculateBill(result.units,_cachedRates);
+    if(tbEl) tbEl.textContent='Rs. '+bill.total.toFixed(2);
+    populateResultTable(bill,result);
+    if(_cachedRates.eb&&bill.total>_cachedRates.eb)
+      showToast('⚠ Bill Rs.'+bill.total.toFixed(2)+' exceeds budget Rs.'+Number(_cachedRates.eb).toFixed(2),'warning');
+  } catch(err) {
+    if(tbEl) tbEl.textContent='Error';
+    showToast(err.message,'error');
+  } finally {
+    setLoading(false); setFetchStatus('');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  TOAST & LOADING
+// ════════════════════════════════════════════════════════════
+function showToast(msg,type){
+  type=type||'info';
+  var toast=document.getElementById('tb-toast');
+  if(!toast){
+    toast=document.createElement('div');
+    toast.id='tb-toast';
+    Object.assign(toast.style,{
+      position:'fixed',bottom:'20px',right:'16px',padding:'11px 18px',
+      borderRadius:'10px',color:'#fff',fontSize:'0.82rem',zIndex:9999,
+      boxShadow:'0 3px 12px rgba(0,0,0,.22)',transition:'opacity 0.35s ease',
+      maxWidth:'calc(100vw - 32px)',wordBreak:'break-word',
+    });
+    document.body.appendChild(toast);
+  }
+  var colors={success:'#16a34a',warning:'#d97706',error:'#dc2626',info:'#4a418a'};
+  toast.style.background=colors[type]||colors.info;
+  toast.style.opacity='1';
+  toast.textContent=msg;
+  clearTimeout(toast._timer);
+  toast._timer=setTimeout(function(){toast.style.opacity='0';},4000);
+}
+
+function setLoading(on){
+  var el=document.getElementById('tb-loading');
+  if(!el){
+    el=document.createElement('div');
+    el.id='tb-loading';
+    el.innerHTML='<div style="width:38px;height:38px;border:3px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:tbspin .8s linear infinite;margin-bottom:10px"></div><p style="font-size:0.9rem">Please wait…</p>';
+    Object.assign(el.style,{
+      position:'fixed',inset:'0',background:'rgba(0,0,0,0.38)',
+      display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+      zIndex:10000,color:'#fff',
+    });
+    var s=document.createElement('style');
+    s.textContent='@keyframes tbspin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+    document.body.appendChild(el);
+  }
+  el.style.display=on?'flex':'none';
+}
+
+// ════════════════════════════════════════════════════════════
+//  PERSIST
+// ════════════════════════════════════════════════════════════
+async function persistSettings(v,isUpdate){
+  setLoading(true);
+  try {
+    await saveAttributesToTB(v);
+    _cachedRates=v;
+    showToast(isUpdate?'Settings updated ✓':'Settings saved ✓','success');
+    setButtonMode('update');
+    populateTariffTable(v);
+    // Auto switch to current settings after save
+    switchTab('current');
+  } catch(err){
+    showToast('Error: '+err.message,'error');
+  } finally { setLoading(false); }
+}
+
+// ════════════════════════════════════════════════════════════
+//  BUTTON EVENTS
+// ════════════════════════════════════════════════════════════
+document.getElementById('tariffForm').addEventListener('submit', async function(e){
+  e.preventDefault();
+  var v=readFormValues();
+  if(validateForm(v).length>0){showToast('Fill all required fields.','error');return;}
+  await persistSettings(v,false);
+});
+document.getElementById('btnUpdate').addEventListener('click', async function(){
+  var v=readFormValues();
+  if(validateForm(v).length>0){showToast('Fill all required fields.','error');return;}
+  await persistSettings(v,true);
+});
+document.getElementById('btnCalcBill').addEventListener('click',function(){calculateBillForRange();});
+
+// ════════════════════════════════════════════════════════════
+//  PAGE INIT — default to "Current Settings" tab
+// ════════════════════════════════════════════════════════════
+async function initPage(){
+  setDefaultDates();
+  // Show Current Settings tab by default
+  switchTab('current');
+  setLoading(true);
+  try {
+    var v=await loadAttributesFromTB();
+    var hasSettings=(v.e1!==undefined&&!isNaN(v.e1));
+    if(hasSettings){
+      _cachedRates=v;
+      fillForm(v);
+      populateTariffTable(v);
+      setButtonMode('update');
+    } else {
+      setButtonMode('save');
+      // No settings yet — switch to tariff settings so user can fill in
+      switchTab('tariff');
+      var tbody=document.querySelector('#tariffTable tbody');
+      if(tbody) tbody.innerHTML='<tr><td colspan="3" style="text-align:center;padding:18px;color:#aaa;font-size:0.8rem;">No settings saved yet.</td></tr>';
+    }
+  } catch(err){
+    showToast('Could not load settings: '+err.message,'error');
+    setButtonMode('save');
+  } finally { setLoading(false); }
+}
+
+// ThingsBoard widget lifecycle
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',initPage);
+} else { initPage(); }
+window.addEventListener('load',function(){
+  var e1=document.getElementById('e1');
+  if(e1&&e1.value===''){_token=null;initPage();}
+});
+
+
+// Hide Powerd by thingsboard watermark
+function hide() {
+ const el = document.querySelector('section.tb-powered-by-footer');
+ if (el) { el.style.display = 'none'; }
+ else { setTimeout(hide, 500); }
+}
+hide();
+</script>

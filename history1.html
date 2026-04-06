@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Energy Log — History</title>
+
+</head>
+<body>
+
+<!--<div class="sidebar-trigger-area" title="Toggle Sidebar"></div>-->
+<!--<nav id="sidebar">-->
+<!--  <ul>-->
+<!--    <li><a id="index page">Home</a></li>-->
+<!--    <li><a id="tariff">Tariff Settings</a></li>-->
+<!--    <li><a id="history">History</a></li>-->
+<!--    <li><a id="live">Live Graph</a></li>-->
+<!--    <li><a id="terms">Terms &amp; Support</a></li>-->
+<!--  </ul>-->
+<!--</nav>-->
+<!--<button id="sidebarToggle" aria-label="Toggle navigation menu">☰</button>-->
+
+<div class="container">
+
+  <div class="page-title">Energy Log — History</div>
+
+  <!-- ══ DATE RANGE PICKER ══════════════════════════════════ -->
+  <div class="date-card">
+    <div class="date-card-row">
+      <div class="date-field">
+        <label for="startTime">From</label>
+        <input type="datetime-local" id="startTime" />
+      </div>
+      <div class="date-field">
+        <label for="endTime">To</label>
+        <input type="datetime-local" id="endTime" />
+      </div>
+      <button class="show-btn" id="showBtn" onclick="onShowChart()">Show</button>
+    </div>
+  </div>
+
+  <!-- ══ STATUS ROW ════════════════════════════════════════ -->
+  <div class="status-row">
+    <div class="status-badge idle" id="statusBadge">
+      <span class="status-pulse"></span>
+      <span id="statusText">Select a date range</span>
+    </div>
+    <div class="time-badge" id="rangeLabel">--</div>
+  </div>
+
+  <!-- ══ METRIC BUTTONS ════════════════════════════════════ -->
+  <div class="metric-selector">
+    <button class="metric-btn active" id="btn-power"       onclick="selectMetric('power')">
+      <span class="btn-icon">⚡</span>Active Power
+    </button>
+    <button class="metric-btn"        id="btn-powerFactor" onclick="selectMetric('powerFactor')">
+      <span class="btn-icon">🔄</span>Power Factor
+    </button>
+    <button class="metric-btn"        id="btn-energy"      onclick="selectMetric('energy')">
+      <span class="btn-icon">🔋</span>Energy
+    </button>
+    <button class="metric-btn"        id="btn-voltage"     onclick="selectMetric('voltage')">
+      <span class="btn-icon">🔌</span>Voltage
+    </button>
+    <button class="metric-btn"        id="btn-current"     onclick="selectMetric('current')">
+      <span class="btn-icon">〰️</span>Current
+    </button>
+    <button class="metric-btn"        id="btn-frequency"   onclick="selectMetric('frequency')">
+      <span class="btn-icon">📡</span>Frequency
+    </button>
+    <!-- Bill — spans all 3 columns -->
+    <button class="metric-btn metric-btn-bill" id="btn-bill" onclick="selectMetric('bill')">
+      <span class="btn-icon">💰</span>Calculated Bill (Rs.)
+    </button>
+  </div>
+
+  <!-- ══ CHART CARD ════════════════════════════════════════ -->
+  <div class="chart-card">
+    <div class="chart-header">
+      <span class="chart-title" id="chartTitle">Active Power</span>
+      <span class="chart-range-badge" id="chartRangeBadge">No data</span>
+    </div>
+
+    <div class="chart-stats-strip">
+      <div class="stat-item">
+        <div class="stat-label">Min</div>
+        <div class="stat-value" id="statMin">--<span class="stat-unit" id="unitMin">W</span></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Avg</div>
+        <div class="stat-value" id="statAvg">--<span class="stat-unit" id="unitAvg">W</span></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Max</div>
+        <div class="stat-value" id="statMax">--<span class="stat-unit" id="unitMax">W</span></div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">Points</div>
+        <div class="stat-value" id="statPts">--</div>
+      </div>
+    </div>
+
+    <div class="bill-notice" id="billNotice">
+      ⚠ Tariff settings not found — configure tariff rates to enable bill chart.
+    </div>
+
+    <div class="chart-body">
+      <div class="live-chart" id="theChart"></div>
+    </div>
+
+    <div class="download-row">
+      <button class="dl-btn" id="downloadCsvBtn" onclick="downloadCsv()" >
+        ⬇ Download CSV
+      </button>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════════════
+var API_BASE  = 'https://energy-app.utech-iiot.lk/api';
+// var TB_USER   = 'demorris.boyd@forliion.com';
+// var TB_PASS   = 'mydevice';
+var DEVICE_ID = '4d8d5ca0-2cc7-11f1-97e7-41e8209c1cc5';
+var MAX_POINTS = 500;
+
+var METRIC_CONFIG = {
+  power:       { label:'Active Power',    unit:'W',   color:'#3b82f6', key:'power'       },
+  powerFactor: { label:'Power Factor',    unit:'PF',  color:'#22c55e', key:'powerFactor' },
+  energy:      { label:'Total Energy',    unit:'kWh', color:'#10b981', key:'energy'      },
+  voltage:     { label:'Voltage',         unit:'V',   color:'#f59e0b', key:'voltage'     },
+  current:     { label:'Current',         unit:'A',   color:'#ef4444', key:'current'     },
+  frequency:   { label:'Frequency',       unit:'Hz',  color:'#a855f7', key:'frequency'   },
+  bill:        { label:'Calculated Bill', unit:'Rs.', color:'#f59e0b', key:'bill'        }
+};
+
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+var jwtToken      = null;
+var chart         = null;
+var _activeMetric = 'power';
+var _lastData     = {};   // telemetry points per key: [{ts, value}]
+var _billData     = [];   // computed bill series: [{ts, value}]
+var _tariffRates  = null;
+
+// ════════════════════════════════════════════════════════════
+//  SIDEBAR
+// ════════════════════════════════════════════════════════════
+var sidebar       = document.getElementById('sidebar');
+var sidebarToggle = document.getElementById('sidebarToggle');
+var triggerArea   = document.querySelector('.sidebar-trigger-area');
+function toggleSidebar(){ sidebar.classList.toggle('open'); }
+if(sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
+if(triggerArea)   triggerArea.addEventListener('click',   toggleSidebar);
+document.addEventListener('click', function(e){
+  if(sidebar && sidebar.classList.contains('open') &&
+     !sidebar.contains(e.target) && e.target!==sidebarToggle && e.target!==triggerArea)
+    sidebar.classList.remove('open');
+});
+
+// ════════════════════════════════════════════════════════════
+//  DEFAULT DATES — month start → now
+// ════════════════════════════════════════════════════════════
+function toInputDatetime(d){
+  var pad = function(n){ return String(n).padStart(2,'0'); };
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())
+    +'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+(function(){
+  var now = new Date();
+  var ms  = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+  document.getElementById('startTime').value = toInputDatetime(ms);
+  document.getElementById('endTime').value   = toInputDatetime(now);
+})();
+
+// ════════════════════════════════════════════════════════════
+//  STATUS HELPERS
+// ════════════════════════════════════════════════════════════
+function setStatus(state, msg){
+  var sb = document.getElementById('statusBadge');
+  var st = document.getElementById('statusText');
+  if(sb) sb.className = 'status-badge '+state;
+  if(st) st.textContent = msg;
+}
+function setRangeLabel(startMs, endMs){
+  var el = document.getElementById('rangeLabel');
+  if(!el) return;
+  if(!startMs){ el.textContent = '--'; return; }
+  function fmt(ms){
+    var d=new Date(ms), p=function(n){return String(n).padStart(2,'0');};
+    return p(d.getDate())+'/'+p(d.getMonth()+1)+' '+p(d.getHours())+':'+p(d.getMinutes());
+  }
+  el.textContent = fmt(startMs)+' → '+fmt(endMs);
+}
+function setRangeBadge(count){
+  var el = document.getElementById('chartRangeBadge');
+  if(el) el.textContent = count > 0 ? count.toLocaleString()+' pts' : 'No data';
+}
+
+// ════════════════════════════════════════════════════════════
+//  STATS STRIP
+// ════════════════════════════════════════════════════════════
+function updateStats(key){
+  var cfg  = METRIC_CONFIG[key];
+  var data = (key === 'bill') ? _billData : (_lastData[key] || []);
+
+  ['unitMin','unitAvg','unitMax'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.textContent = cfg.unit;
+  });
+
+  if(!data.length){
+    ['statMin','statAvg','statMax'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(el) el.innerHTML = '--<span class="stat-unit">'+cfg.unit+'</span>';
+    });
+    document.getElementById('statPts').textContent = '--';
+    return;
+  }
+
+  var vals = data.map(function(p){ return p.value; });
+  var mn  = Math.min.apply(null, vals);
+  var mx  = Math.max.apply(null, vals);
+  var avg = vals.reduce(function(a,b){return a+b;},0) / vals.length;
+  var fmt = function(v){ return v.toFixed(2); };
+
+  document.getElementById('statMin').innerHTML = fmt(mn)+'<span class="stat-unit">'+cfg.unit+'</span>';
+  document.getElementById('statAvg').innerHTML = fmt(avg)+'<span class="stat-unit">'+cfg.unit+'</span>';
+  document.getElementById('statMax').innerHTML = fmt(mx)+'<span class="stat-unit">'+cfg.unit+'</span>';
+  document.getElementById('statPts').textContent = data.length.toLocaleString();
+}
+
+// ════════════════════════════════════════════════════════════
+//  DOWNSAMPLE
+// ════════════════════════════════════════════════════════════
+function downsample(arr, max){
+  if(arr.length <= max) return arr;
+  var out = [], step = arr.length / max;
+  for(var i=0; i<max; i++) out.push(arr[Math.round(i*step)]);
+  return out;
+}
+
+// ════════════════════════════════════════════════════════════
+//  BILL CALCULATION  (identical to home page logic)
+// ════════════════════════════════════════════════════════════
+function calculateBill(u, r){
+  if(!r || u===null || isNaN(u) || u<0) return null;
+  var ec=0, fc=0;
+  if     (u<=30)  { ec=r.e1*u;                                                  fc=r.f1; }
+  else if(u<=60)  { ec=r.e1*30+r.e2*(u-30);                                    fc=r.f2; }
+  else if(u<=90)  { ec=r.e3*60+r.e4*(u-60);                                    fc=r.f4; }
+  else if(u<=120) { ec=r.e3*60+r.e4*30+r.e5*(u-90);                           fc=r.f5; }
+  else if(u<=180) { ec=r.e3*60+r.e4*30+r.e5*30+r.e6*(u-120);                 fc=r.f6; }
+  else            { ec=r.e3*60+r.e4*30+r.e5*30+r.e6*60+r.e7*(u-180);         fc=r.f7; }
+  var s = ec+fc;
+  return s + s*((r.sscl||0)/100);
+}
+
+// Compute cumulative bill series from energy readings.
+// units_consumed_at_each_point = reading - first_reading_in_range.
+// This shows the bill growing from Rs.0 at the start of the range.
+function computeBillSeries(energyData, rates){
+  if(!energyData || !energyData.length || !rates) return [];
+  var sorted = energyData.slice().sort(function(a,b){ return a.ts-b.ts; });
+  var base   = sorted[0].value;
+  return sorted.map(function(pt){
+    var units = Math.max(0, pt.value - base);
+    var bill  = calculateBill(units, rates);
+    return { ts: pt.ts, value: bill !== null ? parseFloat(bill.toFixed(2)) : 0 };
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  ECHARTS
+// ════════════════════════════════════════════════════════════
+function makeOption(key){
+  var cfg  = METRIC_CONFIG[key];
+  var raw  = (key==='bill') ? _billData : (_lastData[key]||[]);
+  var pts  = downsample(raw, MAX_POINTS);
+
+  var times  = pts.map(function(p){
+    var d=new Date(p.ts), pad=function(n){return String(n).padStart(2,'0');};
+    return pad(d.getDate())+'/'+pad(d.getMonth()+1)+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  });
+  var values = pts.map(function(p){ return p.value; });
+
+  return {
+    backgroundColor: 'transparent',
+    grid: { left:58, right:8, top:12, bottom:38, containLabel:false },
+    tooltip: {
+      trigger:'axis',
+      formatter: function(p){
+        if(!p||!p[0]) return '';
+        var prefix = key==='bill' ? 'Rs. ' : '';
+        return p[0].name+'<br/><b>'+prefix+p[0].value+' '+cfg.unit+'</b>';
+      }
+    },
+    xAxis:{
+      type:'category', data:times, boundaryGap:false,
+      axisLabel:{ color:'#999', fontSize:9, rotate:30, interval:'auto' },
+      axisLine:{ lineStyle:{ color:'#e4e0f8' } },
+      axisTick:{ show:false }, splitLine:{ show:false }
+    },
+    yAxis:{
+      type:'value',
+      axisLabel:{
+        color:'#999', fontSize:9,
+        formatter: key==='bill' ? function(v){ return 'Rs.'+v; } : undefined
+      },
+      axisLine:{ show:false }, axisTick:{ show:false },
+      splitLine:{ lineStyle:{ color:'#f0eef9', type:'dashed' } }
+    },
+    series:[{
+      type:'line', data:values, smooth:0.4, symbol:'none',
+      lineStyle:{ color:cfg.color, width:2.5 },
+      areaStyle:{
+        color:{
+          type:'linear', x:0, y:0, x2:0, y2:1,
+          colorStops:[
+            { offset:0, color:cfg.color+'40' },
+            { offset:1, color:cfg.color+'00' }
+          ]
+        }
+      }
+    }]
+  };
+}
+
+function renderChart(key){
+  var dom = document.getElementById('theChart');
+  if(!dom || typeof echarts==='undefined') return;
+  if(!chart){ chart = echarts.init(dom); }
+  chart.setOption(makeOption(key), true);
+}
+
+window.addEventListener('resize', function(){ if(chart) chart.resize(); });
+
+// ════════════════════════════════════════════════════════════
+//  METRIC SWITCH
+// ════════════════════════════════════════════════════════════
+function selectMetric(key){
+  if(!METRIC_CONFIG[key]) return;
+
+  // Show bill-unavailable notice if tariff not loaded
+  var notice = document.getElementById('billNotice');
+  if(key==='bill' && !_tariffRates && notice) notice.style.display='block';
+  else if(notice) notice.style.display='none';
+
+  _activeMetric = key;
+  var cfg = METRIC_CONFIG[key];
+
+  Object.keys(METRIC_CONFIG).forEach(function(k){
+    var btn = document.getElementById('btn-'+k);
+    if(btn) btn.classList.toggle('active', k===key);
+  });
+
+  var titleEl = document.getElementById('chartTitle');
+  if(titleEl) titleEl.textContent = cfg.label;
+
+  var data = (key==='bill') ? _billData : (_lastData[key]||[]);
+  setRangeBadge(data.length);
+  updateStats(key);
+  renderChart(key);
+}
+
+// ════════════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════════════
+// function getToken(callback){
+//   if(jwtToken){ callback(true); return; }
+//   fetch(API_BASE+'/auth/login',{
+//     method:'POST', headers:{'Content-Type':'application/json'},
+//     body: JSON.stringify({username:TB_USER, password:TB_PASS})
+//   })
+//   .then(function(r){ if(!r.ok) throw new Error('Login '+r.status); return r.json(); })
+//   .then(function(d){ jwtToken=d.token; callback(true); })
+//   .catch(function(e){ console.error('[AUTH]',e.message); callback(false); });
+// }
+
+// ════════════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════════════
+function getJwtToken(cb){
+  jwtToken = localStorage.getItem('jwt_token');
+  console.log('[AUTH] JWT token found:', !!jwtToken);
+  cb(!!jwtToken);
+}
+
+// ════════════════════════════════════════════════════════════
+//  LOAD TARIFF RATES from SHARED_SCOPE attributes
+// ════════════════════════════════════════════════════════════
+function loadTariffRates(callback){
+  if(_tariffRates){ callback(true); return; }
+
+  var keys = ['tariff_e1','tariff_f1','tariff_e2','tariff_f2','tariff_e3','tariff_f3',
+    'tariff_e4','tariff_f4','tariff_e5','tariff_f5','tariff_e6','tariff_f6',
+    'tariff_e7','tariff_f7','tariff_sscl'].join(',');
+
+  fetch(API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/attributes/SHARED_SCOPE?keys='+keys,
+    { headers:{'X-Authorization':'Bearer '+jwtToken} })
+  .then(function(r){ if(!r.ok) throw new Error(r.status); return r.json(); })
+  .then(function(list){
+    var m={};
+    list.forEach(function(i){ if(i.key) m[i.key]=parseFloat(i.value); });
+    if(isNaN(m.tariff_e1)){ console.warn('[TARIFF] No rates found'); callback(false); return; }
+    _tariffRates = {
+      e1:m.tariff_e1,           f1:m.tariff_f1||0,
+      e2:m.tariff_e2||m.tariff_e1, f2:m.tariff_f2||0,
+      e3:m.tariff_e3||m.tariff_e2, f3:m.tariff_f3||0,
+      e4:m.tariff_e4||m.tariff_e3, f4:m.tariff_f4||0,
+      e5:m.tariff_e5||m.tariff_e4, f5:m.tariff_f5||0,
+      e6:m.tariff_e6||m.tariff_e5, f6:m.tariff_f6||0,
+      e7:m.tariff_e7||m.tariff_e6, f7:m.tariff_f7||0,
+      sscl: isNaN(m.tariff_sscl) ? 0 : m.tariff_sscl
+    };
+    console.log('[TARIFF] Loaded OK');
+    callback(true);
+  })
+  .catch(function(e){ console.error('[TARIFF]',e.message); callback(false); });
+}
+
+// ════════════════════════════════════════════════════════════
+//  FETCH TELEMETRY (paginated, all keys)
+// ════════════════════════════════════════════════════════════
+var TELE_KEYS = ['power','powerFactor','energy','voltage','current','frequency'];
+
+// async function fetchRange(startMs, endMs){
+//   var allData={};
+//   TELE_KEYS.forEach(function(k){ allData[k]=[]; });
+
+//   var LIMIT=50000, pageStart=startMs, page=0;
+
+//   while(true){
+//     page++;
+//     setStatus('loading','Fetching… (page '+page+')');
+
+//     var url=API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+//       +'/values/timeseries?keys='+TELE_KEYS.join(',')
+//       +'&startTs='+pageStart+'&endTs='+endMs
+//       +'&limit='+LIMIT+'&agg=NONE&orderBy=ASC';
+
+//     var res=await fetch(url,{headers:{'X-Authorization':'Bearer '+jwtToken}});
+
+//     if(res.status===401){
+//       jwtToken=null;
+//       await new Promise(function(r){ getToken(function(){ r(); }); });
+//       continue;
+//     }
+//     if(!res.ok) throw new Error('Fetch failed: '+res.status);
+
+//     var raw=await res.json();
+//     var maxLen=0;
+
+//     TELE_KEYS.forEach(function(k){
+//       var rows=raw[k]||[];
+//       rows.forEach(function(row){ allData[k].push({ts:row.ts, value:parseFloat(row.value)}); });
+//       if(rows.length>maxLen) maxLen=rows.length;
+//     });
+
+//     if(maxLen<LIMIT) break;
+
+//     var lastTs=0;
+//     TELE_KEYS.forEach(function(k){
+//       var arr=allData[k];
+//       if(arr.length && arr[arr.length-1].ts>lastTs) lastTs=arr[arr.length-1].ts;
+//     });
+//     if(!lastTs||lastTs+1>=endMs) break;
+//     pageStart=lastTs+1;
+//   }
+
+//   return allData;
+// }
+
+
+async function fetchRange(startMs, endMs) {
+  var allData = {};
+  TELE_KEYS.forEach(function(k){ allData[k] = []; });
+
+  // Calculate interval so we get ~MAX_POINTS buckets from the server
+  var intervalMs = Math.max(60000, Math.ceil((endMs - startMs) / MAX_POINTS));
+
+  var url = API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID
+    + '/values/timeseries?keys=' + TELE_KEYS.join(',')
+    + '&startTs=' + startMs + '&endTs=' + endMs
+    + '&limit=' + MAX_POINTS
+    + '&agg=AVG'                        // ← server does the averaging
+    + '&interval=' + intervalMs         // ← bucket size in ms
+    + '&orderBy=ASC';
+
+  setStatus('loading', 'Fetching…');
+
+  var res = await fetch(url, { headers: { 'X-Authorization': 'Bearer ' + jwtToken } });
+  if (!res.ok) throw new Error('Fetch failed: ' + res.status);
+
+  var raw = await res.json();
+  TELE_KEYS.forEach(function(k) {
+    var rows = raw[k] || [];
+    rows.forEach(function(row) {
+      allData[k].push({ ts: row.ts, value: parseFloat(row.value) });
+    });
+  });
+
+  return allData;
+}
+
+// ════════════════════════════════════════════════════════════
+//  SHOW CHART HANDLER
+// ════════════════════════════════════════════════════════════
+function onShowChart(){
+  var startVal=document.getElementById('startTime').value;
+  var endVal  =document.getElementById('endTime').value;
+  if(!startVal||!endVal){ setStatus('error','Select both dates'); return; }
+
+  var startMs=new Date(startVal).getTime();
+  var endMs  =new Date(endVal).getTime();
+  if(isNaN(startMs)||isNaN(endMs)){ setStatus('error','Invalid date'); return; }
+  if(startMs>=endMs){ setStatus('error','End must be after start'); return; }
+
+  var btn=document.getElementById('showBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
+  document.getElementById('downloadCsvBtn').disabled=true;
+  setRangeLabel(startMs, endMs);
+  setStatus('loading','Connecting…');
+
+  getJwtToken(function(ok){
+    if(!ok){
+      setStatus('error','Authentication failed');
+      if(btn){ btn.disabled=false; btn.textContent='Show'; }
+      return;
+    }
+
+    // Load tariff rates (needed for bill), then fetch telemetry
+    loadTariffRates(function(){
+      fetchRange(startMs, endMs)
+      .then(function(allData){
+        _lastData=allData;
+
+        // Compute bill series from energy data + tariff rates
+        if(_tariffRates && allData.energy && allData.energy.length){
+          _billData=computeBillSeries(allData.energy, _tariffRates);
+          var finalBill=_billData.length ? _billData[_billData.length-1].value : 0;
+          console.log('[BILL] '+_billData.length+' pts | Final: Rs.'+finalBill.toFixed(2));
+        } else {
+          _billData=[];
+          console.warn('[BILL] Unavailable — no tariff rates or energy data');
+        }
+
+        var total=0;
+        TELE_KEYS.forEach(function(k){ total+=allData[k].length; });
+        setStatus('ready', total.toLocaleString()+' records loaded');
+        document.getElementById('downloadCsvBtn').disabled=false;
+        selectMetric(_activeMetric);
+      })
+      .catch(function(err){
+        console.error('[ERROR]',err);
+        setStatus('error','Error: '+err.message);
+      })
+      .finally(function(){
+        if(btn){ btn.disabled=false; btn.textContent='Show'; }
+      });
+    });
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  CSV DOWNLOAD  (includes bill_Rs column)
+// ════════════════════════════════════════════════════════════
+    // function downloadCsv(){
+    //   if(!Object.keys(_lastData).length){ alert('No data. Click Show first.'); return; }
+    
+    //   var tsSet={};
+    //   TELE_KEYS.forEach(function(k){ (_lastData[k]||[]).forEach(function(p){ tsSet[p.ts]=true; }); });
+    //   _billData.forEach(function(p){ tsSet[p.ts]=true; });
+    
+    //   var tsList=Object.keys(tsSet).map(Number).sort(function(a,b){return a-b;});
+    
+    //   var maps={};
+    //   TELE_KEYS.forEach(function(k){
+    //     maps[k]={};
+    //     (_lastData[k]||[]).forEach(function(p){ maps[k][p.ts]=p.value; });
+    //   });
+    //   var billMap={};
+    //   _billData.forEach(function(p){ billMap[p.ts]=p.value; });
+    
+    //   var header=['datetime','timestamp_ms',
+    //     'power_W','powerFactor_PF','energy_kWh','voltage_V','current_A','frequency_Hz',
+    //     'bill_Rs'];
+    //   var rows=[header.join(',')];
+    
+    //   tsList.forEach(function(ts){
+    //     var d=new Date(ts), p=function(n){return String(n).padStart(2,'0');};
+    //     var dt=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())
+    //       +' '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+    //     var row=[dt,ts];
+    //     TELE_KEYS.forEach(function(k){ var v=maps[k][ts]; row.push(v!==undefined?v:''); });
+    //     var bv=billMap[ts]; row.push(bv!==undefined?bv:'');
+    //     rows.push(row.join(','));
+    //   });
+    
+    //   var blob=new Blob([rows.join('\n')],{type:'text/csv'});
+    //   var url=URL.createObjectURL(blob);
+    //   var a=document.createElement('a');
+    //   a.href=url; a.download='energy_history.csv';
+    //   document.body.appendChild(a); a.click();
+    //   document.body.removeChild(a);
+    //   URL.revokeObjectURL(url);
+    // }
+    
+// ════════════════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════════════════
+setTimeout(function(){ onShowChart(); }, 300);
+self.onInit    = function(){ onShowChart(); };
+self.onDestroy = function(){ if(chart){ chart.dispose(); chart=null; } };
+
+console.log('[HISTORY] Script ready.');
+
+// Hide Powerd by thingsboard watermark
+function hide() {
+ const el = document.querySelector('section.tb-powered-by-footer');
+ if (el) { el.style.display = 'none'; }
+ else { setTimeout(hide, 500); }
+}
+hide();
+</script>
+</body>
+</html>

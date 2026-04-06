@@ -1,0 +1,673 @@
+<div class="sidebar-trigger-area" title="Toggle Sidebar"></div>
+<nav id="sidebar">
+  <ul>
+    <!--<li><a id="index">Home</a></li>-->
+    <li><a id="tariff">Tariff Settings</a></li>
+    <li><a id="history">History</a></li>
+    <li><a id="live">Live Graph</a></li>
+    <!--<li><a id="terms">Terms &amp; Support</a></li>-->
+  </ul>
+</nav>
+<div><button id="sidebarToggle" aria-label="Toggle navigation menu">☰</button></div>
+
+
+<div class="container">
+
+  <div class="status-row">
+    <div class="status-badge offline" id="statusBadge">
+      <span class="status-pulse"></span>
+      <span id="statusText">Connecting…</span>
+    </div>
+    <div class="wifi-badge disconnected" id="wifiBadge">
+      <span>📶</span>
+      <span id="wifiText">Connecting</span>
+    </div>
+    <div class="time-badge" id="rtcTime">--:--:--</div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <p>Loading data…</p>
+  </div>
+
+  <div id="content" style="display:none;">
+
+    <!-- GAUGE CARD -->
+    <div class="gauge-card">
+      <div class="gauge-header">
+        <span class="gauge-title">Active Power</span>
+        <span class="gauge-live-badge">
+          <span class="live-dot offline" id="liveDot"></span>
+          <span id="liveLabel">Offline</span>
+        </span>
+      </div>
+      <div class="gauge-body">
+        <canvas id="gaugeCanvas" width="340" height="190"></canvas>
+        <div class="gauge-usage-label">Power Usage</div>
+        <div class="gauge-value-row">
+          <span class="gauge-big-val" id="gaugeBigVal">--</span>
+          <span class="gauge-unit">W</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROW 1: Voltage + Current -->
+    <div class="metrics-grid">
+      <div class="metric-card" id="voltageCard">
+        <div class="metric-label">Voltage</div>
+        <div class="metric-value" id="voltage">--</div>
+        <div class="metric-unit">Volts</div>
+      </div>
+      <div class="metric-card" id="currentCard">
+        <div class="metric-label">Current</div>
+        <div class="metric-value" id="current">--</div>
+        <div class="metric-unit">Amperes</div>
+      </div>
+    </div>
+
+    <!-- ROW 2: Power + Frequency -->
+    <div class="metrics-grid">
+      <div class="metric-card" id="powerCard">
+        <div class="metric-label">Power</div>
+        <div class="metric-value" id="power">--</div>
+        <div class="metric-unit">Watts</div>
+      </div>
+      <div class="metric-card" id="frequencyCard">
+        <div class="metric-label">Frequency</div>
+        <div class="metric-value" id="frequency">--</div>
+        <div class="metric-unit">Hz</div>
+      </div>
+    </div>
+
+    <!-- ROW 3: Power Factor + Energy -->
+    <div class="metrics-grid">
+      <div class="metric-card" id="pfCard">
+        <div class="metric-label">Power Factor</div>
+        <div class="metric-value" id="powerFactor">--</div>
+        <div class="metric-unit">PF</div>
+      </div>
+      <div class="metric-card" id="energyCard">
+        <div class="metric-label">Energy (Month)</div>
+        <div class="metric-value" id="energy">--</div>
+        <div class="metric-unit">kWh</div>
+      </div>
+    </div>
+
+    <!-- ROW 4: Calculated Bill — full width -->
+    <div class="metrics-grid" style="grid-template-columns:1fr;">
+      <div class="metric-card" id="billCard" style="padding:16px 20px;">
+        <div class="metric-label">Calculated Bill — This Month</div>
+        <div class="metric-value" id="calculatedBillIndex" style="font-size:1.9rem;">--</div>
+        <div class="metric-unit">Rs.</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /container -->
+
+<script>
+console.log('[HOME] Script started');
+
+// ════════════════════════════════════════════════════════════
+//  CONFIG
+// ════════════════════════════════════════════════════════════
+var API_BASE      = 'https://energy-app.utech-iiot.lk/api';
+var DEVICE_ID     = '4d8d5ca0-2cc7-11f1-97e7-41e8209c1cc5';
+var SENSOR_KEYS   = 'voltage,current,power,frequency,powerFactor,energy';
+var POLL_INTERVAL = 5000;
+var BILL_INTERVAL = 60000;
+var INACTIVE_MS   = 2 * 60 * 1000;
+
+// ════════════════════════════════════════════════════════════
+//  STATE
+// ════════════════════════════════════════════════════════════
+var jwtToken          = null;
+var pollTimer         = null;
+var billTimer         = null;
+var _tariffRates      = null;
+var _maxEnergy        = null;
+var _energyBudget     = null;
+var _gaugeMax         = 2000;
+var _consecutiveFails = 0;
+var _lastDeviceTs     = null;
+
+// Gauge smooth-animation state
+var _gaugeAnimVal   = 0;
+var _gaugeTargetVal = 0;
+var _gaugeRafId     = null;
+
+// ════════════════════════════════════════════════════════════
+//  SIDEBAR
+// ════════════════════════════════════════════════════════════
+var sidebar       = document.getElementById('sidebar');
+var sidebarToggle = document.getElementById('sidebarToggle');
+var triggerArea   = document.querySelector('.sidebar-trigger-area');
+
+function toggleSidebar(){ sidebar.classList.toggle('open'); }
+if(sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
+if(triggerArea)   triggerArea.addEventListener('click',   toggleSidebar);
+document.addEventListener('click', function(e){
+  if(sidebar && sidebar.classList.contains('open') &&
+     !sidebar.contains(e.target) &&
+     e.target !== sidebarToggle &&
+     e.target !== triggerArea)
+    sidebar.classList.remove('open');
+});
+
+// ════════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════════
+function pad(n){ return String(n).padStart(2,'0'); }
+function isLive(){ return _lastDeviceTs !== null && (Date.now() - _lastDeviceTs) <= INACTIVE_MS; }
+
+// ════════════════════════════════════════════════════════════
+//  CLOCK
+// ════════════════════════════════════════════════════════════
+function startClock(){
+  function tick(){
+    var el = document.getElementById('rtcTime'); if(!el) return;
+    if(_lastDeviceTs === null){ el.textContent = '--:--:--'; return; }
+    if(isLive()){
+      var d = new Date();
+      el.textContent = pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+    } else {
+      var t = new Date(_lastDeviceTs);
+      el.textContent = 'Last '+pad(t.getHours())+':'+pad(t.getMinutes());
+    }
+  }
+  tick(); setInterval(tick, 1000);
+}
+
+// ════════════════════════════════════════════════════════════
+//  STATUS BADGES
+// ════════════════════════════════════════════════════════════
+function setWifi(on){
+  var b = document.getElementById('wifiBadge'), t = document.getElementById('wifiText');
+  if(!b) return;
+  b.className = 'wifi-badge ' + (on ? 'connected' : 'disconnected');
+  if(t) t.textContent = on ? 'Connected' : 'Offline';
+}
+
+function updateStatusBadge(){
+  var sb = document.getElementById('statusBadge'), st = document.getElementById('statusText');
+  var ld = document.getElementById('liveDot'),     ll = document.getElementById('liveLabel');
+  if(_lastDeviceTs === null){
+    if(sb) sb.className = 'status-badge offline'; if(st) st.textContent = 'Inactive';
+    if(ld) ld.className = 'live-dot offline';     if(ll) ll.textContent = 'Offline';
+  } else if(isLive()){
+    if(sb) sb.className = 'status-badge online';  if(st) st.textContent = 'Active';
+    if(ld) ld.className = 'live-dot';             if(ll) ll.textContent = 'Live';
+  } else {
+    if(sb) sb.className = 'status-badge offline'; if(st) st.textContent = 'Inactive';
+    if(ld) ld.className = 'live-dot offline';     if(ll) ll.textContent = 'Offline';
+  }
+}
+
+function showContent(){
+  var l = document.getElementById('loading'), c = document.getElementById('content');
+  if(l) l.style.display = 'none'; if(c) c.style.display = 'block';
+}
+
+function setCard(id, val, dec){
+  var el = document.getElementById(id); if(!el) return;
+  if(val !== null && val !== undefined && !isNaN(val))
+    el.textContent = Number(val).toFixed(dec);
+  else
+    el.textContent = '--';
+}
+
+function setCardAlert(id, on){
+  var c = document.getElementById(id); if(!c) return;
+  if(on) c.classList.add('alert'); else c.classList.remove('alert');
+}
+
+// ════════════════════════════════════════════════════════════
+//  GAUGE
+// ════════════════════════════════════════════════════════════
+function drawGauge(val){
+  var canvas = document.getElementById('gaugeCanvas');
+  if(!canvas) return;
+
+  var ctx = canvas.getContext('2d');
+  var DPR = window.devicePixelRatio || 1;
+  var W   = canvas.offsetWidth  || 340;
+  var H   = Math.round(W * 0.56);
+
+  canvas.width        = W * DPR;
+  canvas.height       = H * DPR;
+  canvas.style.width  = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.scale(DPR, DPR);
+
+  var cx    = W / 2;
+  var cy    = H * 0.90;
+  var R     = Math.min(W * 0.43, cy * 0.95);
+  var TRACK = Math.max(12, Math.round(R * 0.13));
+  var pct   = Math.min(Math.max((val || 0) / _gaugeMax, 0), 1);
+
+  var A_START = Math.PI;
+  var A_END   = 2 * Math.PI;
+
+  ctx.clearRect(0, 0, W, H);
+
+  // Background track
+  ctx.beginPath();
+  ctx.arc(cx, cy, R, A_START, A_END, false);
+  ctx.strokeStyle = '#e8e4f8';
+  ctx.lineWidth   = TRACK + 8;
+  ctx.lineCap     = 'butt';
+  ctx.stroke();
+
+  // Six colour segments: green → red
+  var COLORS   = ['#22c55e','#84cc16','#eab308','#f97316','#ef4444','#dc2626'];
+  var segSweep = Math.PI / COLORS.length;
+  for(var i = 0; i < COLORS.length; i++){
+    var sa = A_START + i       * segSweep;
+    var ea = A_START + (i + 1) * segSweep;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, sa, ea, false);
+    ctx.strokeStyle = COLORS[i];
+    ctx.lineWidth   = TRACK;
+    ctx.lineCap     = 'butt';
+    ctx.stroke();
+  }
+
+  // Round end-caps
+  (function(){
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, A_START, A_START + 0.02, false);
+    ctx.strokeStyle = COLORS[0];
+    ctx.lineWidth = TRACK; ctx.lineCap = 'round'; ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, A_END - 0.02, A_END, false);
+    ctx.strokeStyle = COLORS[COLORS.length - 1];
+    ctx.lineWidth = TRACK; ctx.lineCap = 'round'; ctx.stroke();
+  })();
+
+  // Sheen highlight on active portion
+  if(pct > 0.01){
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, A_START, A_START + pct * Math.PI, false);
+    ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+    ctx.lineWidth   = TRACK * 0.32;
+    ctx.lineCap     = 'butt';
+    ctx.stroke();
+  }
+
+  // Tick marks + numeric labels
+  var TICKS = 10;
+  for(var j = 0; j <= TICKS; j++){
+    var tp   = j / TICKS;
+    var tang = A_START + tp * Math.PI;
+    var maj  = (j % 2 === 0);
+    var rOuter = R - TRACK / 2 - 4;
+    var rInner = rOuter - (maj ? 13 : 7);
+
+    ctx.beginPath();
+    ctx.moveTo(cx + rOuter * Math.cos(tang), cy + rOuter * Math.sin(tang));
+    ctx.lineTo(cx + rInner * Math.cos(tang), cy + rInner * Math.sin(tang));
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth   = maj ? 2.5 : 1.5;
+    ctx.stroke();
+
+    if(maj){
+      var lrr  = rInner - 14;
+      var lval = Math.round(tp * _gaugeMax);
+      var lstr = lval >= 1000 ? (lval/1000).toFixed(lval % 1000 === 0 ? 0 : 1) + 'k' : String(lval);
+      ctx.fillStyle    = '#777';
+      ctx.font         = 'bold 10px Segoe UI,sans-serif';
+      ctx.textAlign    = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lstr, cx + lrr * Math.cos(tang), cy + lrr * Math.sin(tang));
+    }
+  }
+
+  // Needle
+  var nAng  = A_START + pct * Math.PI;
+  var nLen  = R - TRACK / 2 - 5;
+  var nTail = 18;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(nAng);
+  ctx.shadowColor = 'rgba(0,0,0,0.22)';
+  ctx.shadowBlur  = 9;
+  ctx.beginPath();
+  ctx.moveTo(nLen, 0);
+  ctx.lineTo(-nTail,  4);
+  ctx.lineTo(-nTail, -4);
+  ctx.closePath();
+  ctx.fillStyle = '#288C40';
+  ctx.fill();
+  ctx.restore();
+
+  // Centre hub
+  ctx.beginPath();
+  ctx.arc(cx, cy, 14, 0, 2 * Math.PI);
+  ctx.fillStyle = 'rgba(40,140,64,0.16)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 11, 0, 2 * Math.PI);
+  ctx.fillStyle = '#288C40';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 5, 0, 2 * Math.PI);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+}
+
+function animateGauge(){
+  var diff = _gaugeTargetVal - _gaugeAnimVal;
+  if(Math.abs(diff) < 0.4){
+    _gaugeAnimVal = _gaugeTargetVal;
+    drawGauge(_gaugeAnimVal);
+    _gaugeRafId = null;
+    return;
+  }
+  _gaugeAnimVal += diff * 0.10;
+  drawGauge(_gaugeAnimVal);
+  _gaugeRafId = requestAnimationFrame(animateGauge);
+}
+
+function setGauge(val){
+  if(val === null || isNaN(val)) val = 0;
+  _gaugeTargetVal = val;
+  var el = document.getElementById('gaugeBigVal');
+  if(el) el.textContent = val.toFixed(1);
+  if(!_gaugeRafId) _gaugeRafId = requestAnimationFrame(animateGauge);
+}
+
+window.addEventListener('resize', function(){ drawGauge(_gaugeAnimVal); });
+
+// ════════════════════════════════════════════════════════════
+//  AUTH
+// ════════════════════════════════════════════════════════════
+function getJwtToken(cb){
+  jwtToken = localStorage.getItem('jwt_token');
+  console.log('[AUTH] JWT token found:', !!jwtToken);
+  cb(!!jwtToken);
+}
+
+// ════════════════════════════════════════════════════════════
+//  TARIFF + THRESHOLDS
+// ════════════════════════════════════════════════════════════
+function loadTariffRates(cb){
+  var keys = [
+    'tariff_e1','tariff_f1','tariff_e2','tariff_f2',
+    'tariff_e3','tariff_f3','tariff_e4','tariff_f4',
+    'tariff_e5','tariff_f5','tariff_e6','tariff_f6',
+    'tariff_e7','tariff_f7','tariff_sscl',
+    'tariff_eb',
+    'tariff_mx',
+    'tariff_mxg'
+  ].join(',');
+
+  fetch(API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID+'/values/attributes/SHARED_SCOPE?keys='+keys,
+    {headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+  .then(function(list){
+    var m = {};
+    list.forEach(function(i){ if(i.key) m[i.key] = parseFloat(i.value); });
+
+    console.log('[TARIFF] Loaded attributes:', m);
+
+    if(isNaN(m.tariff_e1)){
+      console.warn('[TARIFF] ❌ tariff_e1 is missing or NaN — tariff not configured');
+      cb(false);
+      return;
+    }
+
+    _tariffRates = {
+      e1:m.tariff_e1, f1:m.tariff_f1,
+      e2:m.tariff_e2, f2:m.tariff_f2,
+      e3:m.tariff_e3, f3:m.tariff_f3,
+      e4:m.tariff_e4, f4:m.tariff_f4,
+      e5:m.tariff_e5, f5:m.tariff_f5,
+      e6:m.tariff_e6, f6:m.tariff_f6,
+      e7:m.tariff_e7, f7:m.tariff_f7,
+      sscl: isNaN(m.tariff_sscl) ? 0 : m.tariff_sscl
+    };
+
+    _energyBudget = isNaN(m.tariff_eb)  ? null : m.tariff_eb;
+    _maxEnergy    = isNaN(m.tariff_mx)  ? null : m.tariff_mx;
+
+    if(!isNaN(m.tariff_mxg) && m.tariff_mxg > 0) _gaugeMax = m.tariff_mxg;
+
+    console.log('[TARIFF] ✅ Rates loaded:', _tariffRates);
+    console.log('[TARIFF] energyBudget:', _energyBudget, '| maxEnergy:', _maxEnergy, '| gaugeMax:', _gaugeMax);
+
+    cb(true);
+  })
+  .catch(function(e){
+    console.error('[TARIFF] ❌ Fetch error:', e.message);
+    cb(false);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  BILL CALCULATION  — Sri Lanka CEB stepped tariff
+// ════════════════════════════════════════════════════════════
+function calculateBill(u, r){
+  if(!r || u === null || isNaN(u) || u < 0) return null;
+  var ec = 0, fc = 0;
+  if     (u <= 30)  { ec = r.e1*u;                                                  fc = r.f1; }
+  else if(u <= 60)  { ec = r.e1*30 + r.e2*(u-30);                                   fc = r.f2; }
+  else if(u <= 90)  { ec = r.e3*60 + r.e4*(u-60);                                   fc = r.f4; }
+  else if(u <= 120) { ec = r.e3*60 + r.e4*30 + r.e5*(u-90);                        fc = r.f5; }
+  else if(u <= 180) { ec = r.e3*60 + r.e4*30 + r.e5*30 + r.e6*(u-120);            fc = r.f6; }
+  else              { ec = r.e3*60 + r.e4*30 + r.e5*30 + r.e6*60 + r.e7*(u-180);  fc = r.f7; }
+  var s = ec + fc;
+  return s + s * ((r.sscl || 0) / 100);
+}
+
+// ════════════════════════════════════════════════════════════
+//  PUSH CALCULATED BILL ONLY → SERVER ATTRIBUTES
+//  NOTE: energy_month_kwh is NOT pushed here because the
+//  "energy" telemetry key already resets monthly on the device.
+//  The Rule Chain reads "energy" telemetry directly for alarms.
+// ════════════════════════════════════════════════════════════
+function pushCalculatedTelemetry(bill) {
+  if (bill === null) return;
+
+  var payload = {
+    bill_month_rs: parseFloat(bill.toFixed(2))
+  };
+
+  fetch(API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID + '/attributes/SERVER_SCOPE', {
+    method:  'POST',
+    headers: {
+      'Content-Type':   'application/json',
+      'X-Authorization': 'Bearer ' + jwtToken
+    },
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    console.log('[ATTR] ✅ bill_month_rs saved:', payload);
+  })
+  .catch(function(e) {
+    console.error('[ATTR] ❌ Failed to save bill_month_rs:', e.message);
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  MONTHLY BILL + ENERGY DISPLAY
+//  "energy" telemetry resets monthly on the device itself —
+//  no need to subtract month-start reading. Just read latest.
+// ════════════════════════════════════════════════════════════
+function refreshMonthlyBill(){
+  console.log('[BILL] refreshMonthlyBill() called');
+  fetchLatestEnergyAndCalculate();
+}
+
+function fetchLatestEnergyAndCalculate(){
+  var url = API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/timeseries?keys=energy&limit=1&useStrictDataTypes=false';
+
+  console.log('[BILL] Fetching latest energy reading...');
+
+  fetch(url, {headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+  .then(function(d){
+    var rows = (d.energy && d.energy.length) ? d.energy : [];
+    console.log('[BILL] Latest energy rows:', rows);
+
+    if(!rows.length){
+      console.warn('[BILL] ❌ No energy reading returned');
+      return;
+    }
+
+    // ── energy resets monthly on device — use raw value directly ──
+    var units = parseFloat(rows[0].value);
+
+    if(isNaN(units)){
+      console.warn('[BILL] ❌ energy value is NaN');
+      return;
+    }
+
+    console.log('[BILL] Monthly energy (from device):', units.toFixed(3), 'kWh');
+
+    // ── Update Energy card ──────────────────────────────
+    setCard('energy', units, 3);
+    setCardAlert('energyCard', _maxEnergy !== null && units > _maxEnergy);
+
+    // ── Update Bill card ────────────────────────────────
+    if(_tariffRates){
+      var total = calculateBill(units, _tariffRates);
+      console.log('[BILL] Calculated bill: Rs.', total ? total.toFixed(2) : 'null');
+
+      setCard('calculatedBillIndex', total, 2);
+      setCardAlert('billCard', _energyBudget !== null && total !== null && total > _energyBudget);
+
+      // Save bill to server attributes (triggers Bill alarm in Rule Chain)
+      pushCalculatedTelemetry(total);
+
+      console.log('[BILL] ✅ Done — units:', units.toFixed(3), 'kWh | bill: Rs.', total ? total.toFixed(2) : '--');
+    } else {
+      console.warn('[BILL] ❌ _tariffRates is null — bill cannot be calculated.',
+        'Check that tariff attributes are saved in ThingsBoard Shared Scope.');
+    }
+  })
+  .catch(function(e){ console.error('[BILL] ❌ latest energy fetch error:', e.message); });
+}
+
+// ════════════════════════════════════════════════════════════
+//  MAIN POLL
+// ════════════════════════════════════════════════════════════
+function fetchAndUpdate(){
+  var url = API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
+    +'/values/timeseries?keys='+SENSOR_KEYS
+    +'&limit=1&useStrictDataTypes=false';
+
+  fetch(url, {headers:{'X-Authorization':'Bearer '+jwtToken}})
+  .then(function(r){
+    if(r.status === 401){
+      console.warn('[POLL] 401 — JWT expired, refreshing token...');
+      jwtToken = null;
+      getJwtToken(function(ok){ if(ok) fetchAndUpdate(); });
+      return null;
+    }
+    if(!r.ok) throw new Error('API '+r.status);
+    return r.json();
+  })
+  .then(function(raw){
+    if(!raw) return;
+    _consecutiveFails = 0;
+    setWifi(true);
+
+    function g(k){
+      var e = raw[k]; if(!e || !e.length) return {val:null, ts:null};
+      var n = parseFloat(e[0].value);
+      return {val: isNaN(n) ? null : n, ts: e[0].ts};
+    }
+
+    var vR  = g('voltage'),
+        cR  = g('current'),
+        pR  = g('power'),
+        fR  = g('frequency'),
+        pfR = g('powerFactor');
+
+    var latestTs = null;
+    [vR, cR, pR, fR, pfR].forEach(function(r){
+      if(r.ts && (latestTs === null || r.ts > latestTs)) latestTs = r.ts;
+    });
+    if(latestTs !== null) _lastDeviceTs = latestTs;
+
+    setCard('voltage',     vR.val,  1);
+    setCard('current',     cR.val,  3);
+    setCard('power',       pR.val,  1);
+    setCard('frequency',   fR.val,  1);
+    setCard('powerFactor', pfR.val, 2);
+
+    setGauge(pR.val !== null ? pR.val : 0);
+    updateStatusBadge();
+    showContent();
+
+    console.log('[POLL] ts:'+(latestTs ? new Date(latestTs).toLocaleTimeString() : '--')
+      +' | live:'+isLive());
+  })
+  .catch(function(e){
+    _consecutiveFails++;
+    console.error('[FETCH] ❌ Error:', e.message, '| consecutive fails:', _consecutiveFails);
+    if(_consecutiveFails >= 3){ setWifi(false); updateStatusBadge(); }
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  STARTUP
+// ════════════════════════════════════════════════════════════
+function startWidget(){
+  if(pollTimer !== null){ console.warn('[INIT] Already started.'); return; }
+  console.log('[INIT] startWidget()');
+
+  startClock();
+  setWifi(false);
+  updateStatusBadge();
+  drawGauge(0);
+
+  getJwtToken(function(ok){
+    if(!ok){
+      console.error('[INIT] ❌ No JWT token found in localStorage — user may not be logged in');
+      setWifi(false);
+      return;
+    }
+    setWifi(true);
+
+    loadTariffRates(function(ok){
+      console.log('[INIT] loadTariffRates callback — ok:', ok, '| _tariffRates:', _tariffRates);
+
+      // Always start polling regardless of tariff load result
+      fetchAndUpdate();
+      pollTimer = setInterval(fetchAndUpdate, POLL_INTERVAL);
+
+      // Always attempt bill calculation — energy card can show even without tariff
+      refreshMonthlyBill();
+      billTimer = setInterval(refreshMonthlyBill, BILL_INTERVAL);
+    });
+  });
+}
+
+// ThingsBoard widget lifecycle hooks
+self.onInit    = function(){ startWidget(); };
+self.onDestroy = function(){
+  if(pollTimer)  { clearInterval(pollTimer);          pollTimer  = null; }
+  if(billTimer)  { clearInterval(billTimer);          billTimer  = null; }
+  if(_gaugeRafId){ cancelAnimationFrame(_gaugeRafId); _gaugeRafId = null; }
+};
+
+// Fallback init
+setTimeout(function(){ if(pollTimer !== null) return; startWidget(); }, 300);
+console.log('[HOME] Script parsed.');
+
+// Hide ThingsBoard watermark
+function hide() {
+  var el = document.querySelector('section.tb-powered-by-footer');
+  if (el) { el.style.display = 'none'; }
+  else { setTimeout(hide, 500); }
+}
+hide();
+
+</script>
