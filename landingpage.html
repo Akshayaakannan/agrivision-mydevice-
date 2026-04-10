@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>UTech iIoT — Launcher</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="container">
+
+    <!-- SETUP VIEW -->
+    <div id="setupView">
+      <h1>⚡ Energy Hub</h1>
+      <p class="subtitle">Select your device(s) to continue</p>
+
+      <div class="selection-grid">
+
+        <div class="card" id="cardCoollink" onclick="toggleCard('coollink')">
+          <div class="card-left">
+            <div class="card-icon coollink-icon">
+              <svg viewBox="0 0 48 48" fill="none">
+                <circle cx="10" cy="24" r="5" stroke="currentColor" stroke-width="2.5"/>
+                <circle cx="38" cy="12" r="5" stroke="currentColor" stroke-width="2.5"/>
+                <circle cx="38" cy="36" r="5" stroke="currentColor" stroke-width="2.5"/>
+                <line x1="15" y1="22" x2="33" y2="14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="15" y1="26" x2="33" y2="34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="10" cy="24" r="2" fill="currentColor"/>
+                <circle cx="38" cy="12" r="2" fill="currentColor"/>
+                <circle cx="38" cy="36" r="2" fill="currentColor"/>
+              </svg>
+            </div>
+            <div>
+              <div class="card-title">Coollink</div>
+              <div class="card-desc">Gateway &amp; serial sensors</div>
+            </div>
+          </div>
+          <div class="check-indicator" id="checkCoollink">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+
+        <div class="card" id="cardEnergyGenie" onclick="toggleCard('energygenie')">
+          <div class="card-left">
+            <div class="card-icon energygenie-icon">
+              <svg viewBox="0 0 48 48" fill="none">
+                <path d="M26 6L14 26h12l-4 16 14-22H26L26 6z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div>
+              <div class="card-title">Energy GENIE</div>
+              <div class="card-desc">Home energy monitor</div>
+            </div>
+          </div>
+          <div class="check-indicator" id="checkEnergyGenie">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+        </div>
+
+      </div>
+
+      <button class="btn" id="saveBtn" onclick="saveAndProceed()" disabled>Save &amp; Continue</button>
+      <p class="hint-text">You can select one or both.</p>
+    </div>
+
+    <!-- SELECTOR VIEW -->
+    <div id="selectorView" class="hidden">
+      <h1>📱 Choose Dashboard</h1>
+      <p class="subtitle">You have access to both devices</p>
+
+      <div class="dashboard-options">
+
+        <button class="dashboard-btn" onclick="launchApp('coollink')">
+          <div class="dbtn-left">
+            <div class="dbtn-icon coollink-icon">
+              <svg viewBox="0 0 48 48" fill="none">
+                <circle cx="10" cy="24" r="5" stroke="currentColor" stroke-width="2.5"/>
+                <circle cx="38" cy="12" r="5" stroke="currentColor" stroke-width="2.5"/>
+                <circle cx="38" cy="36" r="5" stroke="currentColor" stroke-width="2.5"/>
+                <line x1="15" y1="22" x2="33" y2="14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <line x1="15" y1="26" x2="33" y2="34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <circle cx="10" cy="24" r="2" fill="currentColor"/>
+                <circle cx="38" cy="12" r="2" fill="currentColor"/>
+                <circle cx="38" cy="36" r="2" fill="currentColor"/>
+              </svg>
+            </div>
+            <span class="dbtn-name">Coollink</span>
+          </div>
+          <span class="dbtn-arrow">→</span>
+        </button>
+
+        <button class="dashboard-btn" onclick="launchApp('energygenie')">
+          <div class="dbtn-left">
+            <div class="dbtn-icon energygenie-icon">
+              <svg viewBox="0 0 48 48" fill="none">
+                <path d="M26 6L14 26h12l-4 16 14-22H26L26 6z" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <span class="dbtn-name">Energy GENIE</span>
+          </div>
+          <span class="dbtn-arrow">→</span>
+        </button>
+
+      </div>
+
+      <p class="reset-link">
+        <span onclick="resetSetup()">Change device selection</span>
+      </p>
+    </div>
+
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      const URLS = {
+        coollink:    'https://energy-app.utech-iiot.lk/dashboards/085cc800-1b83-11f1-9206-2f623812471c',
+        energygenie: 'https://energy-app.utech-iiot.lk/dashboards/caedc3f0-33d0-11f1-97e7-41e8209c1cc5',
+      };
+      const KEY = 'utech_pref';
+      const selected = new Set();
+
+      const $ = id => document.getElementById(id);
+      const show = id => $(id).classList.remove('hidden');
+      const hide = id => $(id).classList.add('hidden');
+
+      window.toggleCard = function (app) {
+        const cardId  = app === 'coollink' ? 'cardCoollink'  : 'cardEnergyGenie';
+        const checkId = app === 'coollink' ? 'checkCoollink' : 'checkEnergyGenie';
+        if (selected.has(app)) {
+          selected.delete(app);
+          $(cardId).classList.remove('selected');
+          $(checkId).classList.remove('checked');
+        } else {
+          selected.add(app);
+          $(cardId).classList.add('selected');
+          $(checkId).classList.add('checked');
+        }
+        $('saveBtn').disabled = selected.size === 0;
+      };
+
+      window.saveAndProceed = function () {
+        if (selected.size === 0) return;
+        const pref = selected.size === 1 ? Array.from(selected)[0] : 'both';
+        localStorage.setItem(KEY, pref);
+        if (pref === 'both') { hide('setupView'); show('selectorView'); }
+        else { window.location.href = URLS[pref]; }
+      };
+
+      window.launchApp = function (app) {
+        window.location.href = URLS[app];
+      };
+
+      window.resetSetup = function () {
+        localStorage.removeItem(KEY);
+        selected.clear();
+        ['cardCoollink','cardEnergyGenie'].forEach(id => $(id).classList.remove('selected'));
+        ['checkCoollink','checkEnergyGenie'].forEach(id => $(id).classList.remove('checked'));
+        $('saveBtn').disabled = true;
+        hide('selectorView'); show('setupView');
+      };
+
+      function init() {
+        const pref = localStorage.getItem(KEY);
+        if (!pref)           { show('setupView');    hide('selectorView'); }
+        else if (pref==='both') { hide('setupView'); show('selectorView'); }
+        else                 { window.location.href = URLS[pref]; }
+      }
+
+      init();
+      window.addEventListener('pageshow', init);
+    })();
+  </script>
+</body>
+</html>
