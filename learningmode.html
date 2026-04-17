@@ -146,14 +146,60 @@
 </div><!-- /.container -->
 
 
+<style>
+/* ── Delete button on learned-device list rows ── */
+.btn-delete-red {
+  background: #e53935;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+.btn-delete-red:hover { background: #b71c1c; }
+
+/* ── Red ✕ on device cards (custom only, unlearned) ── */
+.dc-delete-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: #e53935;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 5;
+  transition: background 0.15s;
+}
+.dc-delete-btn:hover { background: #b71c1c; }
+
+.device-card { position: relative; }
+</style>
+
+
 <script>
 // ═══════════════════════════════════════════════════════════
 //  CONFIG
 // ═══════════════════════════════════════════════════════════
 var API_BASE          = 'https://energy-app.utech-iiot.lk/api';
 var DEVICE_ID         = '422a2800-33cc-11f1-97e7-41e8209c1cc5';
-var SERVER_ATTR_KEY   = 'nilm_learned_devices';   // JSON array — learned devices
-var SERVER_CUSTOM_KEY = 'nilm_custom_devices';    // JSON array — custom device names
+var SERVER_ATTR_KEY   = 'nilm_learned_devices';
+var SERVER_CUSTOM_KEY = 'nilm_custom_devices';
 var LEARN_DURATION_MS = 60000;
 
 var DEFAULT_DEVICES = [
@@ -168,8 +214,8 @@ var DEFAULT_DEVICES = [
 // ═══════════════════════════════════════════════════════════
 //  RUNTIME STATE
 // ═══════════════════════════════════════════════════════════
-var learnedDevices   = [];   // [{name, icon, watts, baseline, date}, …]
-var customDevices    = [];   // [{name, icon}, …]
+var learnedDevices   = [];
+var customDevices    = [];
 var selectedDevice   = null;
 var learnTimer       = null;
 var livePoller       = null;
@@ -178,7 +224,7 @@ var samples          = [];
 var pieChartInstance = null;
 
 // ═══════════════════════════════════════════════════════════
-//  JWT TOKEN HELPER
+//  JWT TOKEN
 // ═══════════════════════════════════════════════════════════
 function getToken() {
   try {
@@ -190,7 +236,7 @@ function getToken() {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  TB READ — generic single attribute fetch
+//  TB READ / WRITE
 // ═══════════════════════════════════════════════════════════
 function tbReadAttr(key, cb) {
   var url = API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID
@@ -215,9 +261,6 @@ function tbReadAttr(key, cb) {
   xhr.send();
 }
 
-// ═══════════════════════════════════════════════════════════
-//  TB WRITE — generic attribute save (key → JSON array)
-// ═══════════════════════════════════════════════════════════
 function tbWriteAttr(key, arr, cb) {
   var url  = API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID + '/attributes/SERVER_SCOPE';
   var body = {};
@@ -234,14 +277,11 @@ function tbWriteAttr(key, arr, cb) {
   xhr.send(JSON.stringify(body));
 }
 
-// Convenience wrappers
-function tbLoadLearnedDevices(cb)  { tbReadAttr(SERVER_ATTR_KEY,   cb); }
-function tbSaveLearnedDevices(cb)  { tbWriteAttr(SERVER_ATTR_KEY,   learnedDevices, cb); }
-function tbLoadCustomDevices(cb)   { tbReadAttr(SERVER_CUSTOM_KEY,  cb); }
-function tbSaveCustomDevices(cb)   { tbWriteAttr(SERVER_CUSTOM_KEY, customDevices,  cb); }
+function tbSaveLearnedDevices(cb) { tbWriteAttr(SERVER_ATTR_KEY,   learnedDevices, cb); }
+function tbSaveCustomDevices(cb)  { tbWriteAttr(SERVER_CUSTOM_KEY, customDevices,  cb); }
 
 // ═══════════════════════════════════════════════════════════
-//  SYNC STATUS BADGE
+//  SYNC BADGE
 // ═══════════════════════════════════════════════════════════
 function showSyncBadge(text, color) {
   var badge = document.getElementById('syncBadge');
@@ -252,6 +292,17 @@ function showSyncBadge(text, color) {
   badge.style.color = color === '#fde8e8' ? '#c0392b' : '#288C40';
   clearTimeout(badge._hide);
   badge._hide = setTimeout(function() { badge.style.display = 'none'; }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+function isLearned(name) {
+  return learnedDevices.some(function(d) { return d.name === name; });
+}
+
+function isCustom(name) {
+  return customDevices.some(function(d) { return d.name === name; });
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -286,13 +337,20 @@ function showStep(stepId) {
   ['stepSelect', 'stepLearn', 'stepResult'].forEach(function(s) {
     document.getElementById(s).style.display = (s === stepId) ? 'block' : 'none';
   });
-  var titles = { stepSelect:'Step 1: Select Device', stepLearn:'Step 2: Measure', stepResult:'Step 3: Result' };
+  var titles = {
+    stepSelect: 'Step 1: Select Device',
+    stepLearn:  'Step 2: Measure',
+    stepResult: 'Step 3: Result'
+  };
   document.getElementById('learnHeaderTitle').textContent = titles[stepId] || '';
   if (stepId === 'stepSelect') renderGrids();
 }
 
 // ═══════════════════════════════════════════════════════════
-//  TAB 1 — LIST & DELETE LEARNED DEVICE
+//  TAB 1 — LIST
+//  Delete button here removes from learnedDevices (server).
+//  After deletion, renderGrids() re-evaluates each card so
+//  custom devices that are no longer learned get their ✕ back.
 // ═══════════════════════════════════════════════════════════
 function renderList() {
   var wrap  = document.getElementById('learnedListWrap');
@@ -322,7 +380,7 @@ function renderList() {
       + '</div>'
       + '<div class="li-right">'
       + '<div class="li-watts">' + (dev.watts !== null ? dev.watts.toFixed(0) : '--') + ' W</div>'
-      + '<button class="btn-delete-red" title="Delete ' + dev.name + '" data-name="' + dev.name + '">✕</button>'
+      + '<button class="btn-delete-red" data-name="' + dev.name + '">✕</button>'
       + '</div>';
     wrap.appendChild(div);
   });
@@ -334,58 +392,88 @@ function renderList() {
   });
 }
 
+// ═══════════════════════════════════════════════════════════
+//  DELETE LEARNED DEVICE
+//  Removes from learnedDevices → saves to server → refreshes
+//  both the list tab and the Learn New grids so the custom
+//  device card regains its ✕ delete button.
+// ═══════════════════════════════════════════════════════════
 function deleteLearnedDevice(name) {
   if (!confirm('Delete learned data for ' + name + '?')) return;
-
   learnedDevices = learnedDevices.filter(function(d) { return d.name !== name; });
   showSyncBadge('⏳ Saving…', '#fff8e1');
-
   tbSaveLearnedDevices(function(ok) {
     showSyncBadge(ok ? '✓ Deleted from server' : '⚠ Delete failed', ok ? '#e6f4ea' : '#fde8e8');
     renderList();
+    renderGrids();   // re-draw Learn New grids with updated learned state
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DELETE CUSTOM DEVICE
+//  Only callable when the custom device is NOT yet learned.
+//  Removes from customDevices list → saves to server.
+// ═══════════════════════════════════════════════════════════
+function deleteCustomDevice(name) {
+  if (!confirm('Remove custom device "' + name + '"?')) return;
+  customDevices = customDevices.filter(function(d) { return d.name !== name; });
+  showSyncBadge('⏳ Saving…', '#fff8e1');
+  tbSaveCustomDevices(function(ok) {
+    showSyncBadge(ok ? '✓ Removed from server' : '⚠ Remove failed', ok ? '#e6f4ea' : '#fde8e8');
     renderGrids();
   });
 }
 
 // ═══════════════════════════════════════════════════════════
-//  TAB 2 — LEARN WIZARD
+//  TAB 2 — DEVICE GRIDS
+//
+//  DEFAULT devices:
+//    • Learned  → show green ✓ badge, no delete button
+//    • Unlearned → plain card, no delete button
+//
+//  CUSTOM devices:
+//    • Learned  → show green ✓ badge, NO delete button
+//                 (delete via "My Devices" tab instead)
+//    • Unlearned → show red ✕ button to remove from custom list
 // ═══════════════════════════════════════════════════════════
 function renderGrids() {
-  function buildGrid(containerId, list, allowDelete) {
+  function buildGrid(containerId, list, isCustomList) {
     var el = document.getElementById(containerId);
-    el.innerHTML = list.map(function(dev) {
-      var isLearned = learnedDevices.some(function(d) { return d.name === dev.name; });
-      var deleteBtn = allowDelete
-        ? '<button class="dc-delete-btn" title="Remove ' + dev.name + '" data-name="' + dev.name + '">✕</button>'
-        : '';
-      return '<div class="device-card' + (isLearned ? ' learned' : '') + '"'
-           + ' data-select-name="' + dev.name + '" data-select-icon="' + dev.icon + '">'
-           + deleteBtn
-           + '<span class="dc-icon" style="pointer-events:none;">' + dev.icon + '</span>'
-           + '<span class="dc-name" style="pointer-events:none;">' + dev.name + '</span>'
-           + (isLearned ? '<span class="dc-badge">✓</span>' : '')
-           + '</div>';
-    }).join('');
+    el.innerHTML = '';
 
-    // Select handler — only on the card itself (not the delete button)
-    el.querySelectorAll('.device-card').forEach(function(card) {
+    list.forEach(function(dev) {
+      var learned = isLearned(dev.name);
+
+      var card = document.createElement('div');
+      card.className = 'device-card' + (learned ? ' learned' : '');
+
+      // Show red ✕ ONLY for custom devices that are NOT yet learned
+      var showDeleteBtn = isCustomList && !learned;
+
+      card.innerHTML =
+        (showDeleteBtn
+          ? '<button class="dc-delete-btn" data-name="' + dev.name + '">✕</button>'
+          : '')
+        + '<span class="dc-icon" style="pointer-events:none;">' + dev.icon + '</span>'
+        + '<span class="dc-name" style="pointer-events:none;">' + dev.name + '</span>'
+        + (learned ? '<span class="dc-badge">✓</span>' : '');
+
+      // Tap card → select for learning (ignore ✕ button taps)
       card.addEventListener('click', function(e) {
         if (e.target.classList.contains('dc-delete-btn')) return;
-        var n = card.getAttribute('data-select-name');
-        var i = card.getAttribute('data-select-icon');
-        selectDev(n, i, card);
+        selectDev(dev.name, dev.icon, card);
       });
-    });
 
-    // Delete handler for custom devices
-    if (allowDelete) {
-      el.querySelectorAll('.dc-delete-btn').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
+      // Tap ✕ → delete this custom device from the list
+      if (showDeleteBtn) {
+        card.querySelector('.dc-delete-btn').addEventListener('click', function(e) {
           e.stopPropagation();
-          deleteCustomDevice(btn.getAttribute('data-name'));
+          deleteCustomDevice(dev.name);
         });
-      });
-    }
+      }
+
+      el.appendChild(card);
+    });
   }
 
   buildGrid('defaultDeviceGrid', DEFAULT_DEVICES, false);
@@ -404,7 +492,9 @@ function selectDev(name, icon, el) {
   document.getElementById('btnNextLearn').disabled = false;
 }
 
-// ── Add custom device (save to server) ───────────────────
+// ═══════════════════════════════════════════════════════════
+//  ADD CUSTOM DEVICE → saved to server
+// ═══════════════════════════════════════════════════════════
 document.getElementById('btnAddCustom').addEventListener('click', function() {
   var input = document.getElementById('customDeviceName');
   var name  = input.value.trim();
@@ -416,27 +506,15 @@ document.getElementById('btnAddCustom').addEventListener('click', function() {
   customDevices.push({ name: name, icon: '🔌' });
   input.value = '';
   showSyncBadge('⏳ Saving…', '#fff8e1');
-
   tbSaveCustomDevices(function(ok) {
     showSyncBadge(ok ? '✓ Saved to server' : '⚠ Server save failed', ok ? '#e6f4ea' : '#fde8e8');
     renderGrids();
   });
 });
 
-// ── Delete custom device (save to server) ───────────────
-function deleteCustomDevice(name) {
-  if (!confirm('Remove custom device "' + name + '"?\nIf it has learned data, that will remain.')) return;
-
-  customDevices = customDevices.filter(function(d) { return d.name !== name; });
-  showSyncBadge('⏳ Saving…', '#fff8e1');
-
-  tbSaveCustomDevices(function(ok) {
-    showSyncBadge(ok ? '✓ Removed from server' : '⚠ Remove failed', ok ? '#e6f4ea' : '#fde8e8');
-    renderGrids();
-  });
-}
-
-// ── Live watt fetch ──────────────────────────────────────
+// ═══════════════════════════════════════════════════════════
+//  LIVE WATT FETCH
+// ═══════════════════════════════════════════════════════════
 function fetchWatts(cb) {
   var token = getToken();
   if (!token) return cb(null);
@@ -456,7 +534,6 @@ function fetchWatts(cb) {
   xhr.send();
 }
 
-// ── Proceed to measure step ──────────────────────────────
 document.getElementById('btnNextLearn').addEventListener('click', function() {
   document.getElementById('learnDeviceName').textContent =
     selectedDevice.icon + ' ' + selectedDevice.name;
@@ -466,7 +543,6 @@ document.getElementById('btnNextLearn').addEventListener('click', function() {
   fetchWatts(function(w) { baselineWatts = w; });
 });
 
-// ── Start recording ──────────────────────────────────────
 document.getElementById('btnLearnStart').addEventListener('click', function() {
   document.getElementById('btnLearnStart').style.display      = 'none';
   document.getElementById('learnCountdownWrap').style.display = 'block';
@@ -479,12 +555,10 @@ document.getElementById('btnLearnStart').addEventListener('click', function() {
     var elap = Date.now() - start;
     var rem  = Math.max(0, Math.ceil((LEARN_DURATION_MS - elap) / 1000));
     document.getElementById('learnCountdownNum').textContent = rem;
-
-    var ring  = document.getElementById('learnRingArc');
-    var circ  = 2 * Math.PI * 52;
+    var ring = document.getElementById('learnRingArc');
+    var circ = 2 * Math.PI * 52;
     ring.style.strokeDasharray  = circ;
     ring.style.strokeDashoffset = circ * (1 - rem / 60);
-
     if (elap >= LEARN_DURATION_MS) endLearning();
   }, 250);
 
@@ -500,7 +574,6 @@ document.getElementById('btnLearnStart').addEventListener('click', function() {
   poll();
 });
 
-// ── Finish learning — calculate, save to server ──────────
 function endLearning() {
   clearInterval(learnTimer);
   clearInterval(livePoller);
@@ -538,13 +611,10 @@ function endLearning() {
   msgEl.textContent   = '⏳ Saving to server…';
 
   tbSaveLearnedDevices(function(ok) {
-    if (ok) {
-      msgEl.className   = 'save-status-msg success';
-      msgEl.textContent = '✓ Saved to ThingsBoard server attribute';
-    } else {
-      msgEl.className   = 'save-status-msg error';
-      msgEl.textContent = '⚠ Server save failed — data kept in memory only';
-    }
+    msgEl.className   = ok ? 'save-status-msg success' : 'save-status-msg error';
+    msgEl.textContent = ok
+      ? '✓ Saved to ThingsBoard server attribute'
+      : '⚠ Server save failed — data kept in memory only';
   });
 
   document.getElementById('resultDeviceName').textContent = entry.icon + ' ' + entry.name;
@@ -566,7 +636,7 @@ document.getElementById('btnLearnAnother').addEventListener('click', function() 
 });
 
 // ═══════════════════════════════════════════════════════════
-//  TAB 3 — CONSUMPTION PIE CHART
+//  TAB 3 — PIE CHART
 // ═══════════════════════════════════════════════════════════
 function renderChart() {
   var chartDom = document.getElementById('pieChart');
@@ -584,7 +654,7 @@ function renderChart() {
     .map(function(d) {
       return {
         value: d.watts ? parseFloat(((d.watts * 4 * days) / 1000).toFixed(2)) : 0,
-        name: d.name
+        name:  d.name
       };
     })
     .filter(function(d) { return d.value > 0; });
@@ -599,11 +669,8 @@ function renderChart() {
 
   pieChartInstance.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c} kWh ({d}%)' },
-    legend:  {
-      bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10,
-      textStyle: { fontSize: 10 }
-    },
-    color: ['#288C40','#75B739','#e55353','#f5a623','#4a418a','#16a34a','#d97706'],
+    legend:  { bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10 } },
+    color:   ['#288C40','#75B739','#e55353','#f5a623','#4a418a','#16a34a','#d97706'],
     series: [{
       type: 'pie', radius: ['40%','70%'], center: ['50%','40%'],
       avoidLabelOverlap: false,
@@ -621,10 +688,7 @@ window.addEventListener('resize', function() {
 });
 
 // ═══════════════════════════════════════════════════════════
-//  BOOT SEQUENCE
-//  1. Load learned devices from server
-//  2. Load custom devices from server
-//  3. Render initial view
+//  BOOT
 // ═══════════════════════════════════════════════════════════
 function boot() {
   initDates();
@@ -634,9 +698,9 @@ function boot() {
     + '⏳ Loading from server…</div>';
   document.getElementById('learnedEmptyState').style.display = 'none';
 
-  tbLoadLearnedDevices(function(arr) {
+  tbReadAttr(SERVER_ATTR_KEY, function(arr) {
     learnedDevices = arr;
-    tbLoadCustomDevices(function(customs) {
+    tbReadAttr(SERVER_CUSTOM_KEY, function(customs) {
       customDevices = customs;
       switchTab('list');
     });
@@ -645,7 +709,6 @@ function boot() {
 
 boot();
 
-// Hide ThingsBoard "Powered by" footer
 function hideFooter() {
   var el = document.querySelector('section.tb-powered-by-footer');
   if (el) el.style.display = 'none';
