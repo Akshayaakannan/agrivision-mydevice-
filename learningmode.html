@@ -1,538 +1,655 @@
-<!-- ═══════════════════════════════════════════════════
-     LEARNING MODE — ThingsBoard Widget  (learn.html)
-     Multi-step: Select Device → Learn → Result → List
-     ═══════════════════════════════════════════════════ -->
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 
-<!-- Sidebar (same structure as homepage) -->
-<!--<div class="sidebar-trigger-area" title="Toggle Sidebar"></div>-->
-<!--<nav id="sidebar">-->
-<!--  <ul>-->
-<!--    <li><a id="tariff">Tariff Settings</a></li>-->
-<!--    <li><a id="history">History</a></li>-->
-<!--    <li><a id="live">Live Graph</a></li>-->
-<!--    <li><a id="learn" class="active-nav">Learning Mode</a></li>-->
-<!--  </ul>-->
-<!--</nav>-->
-<!--<div><button id="sidebarToggle" aria-label="Toggle navigation menu">☰</button></div>-->
+<div class="sidebar-trigger-area" title="Toggle Sidebar"></div>
 
-<!-- ──────────────── STEP 1 : SELECT DEVICE ──────────────── -->
-<div class="lrn-container" id="stepSelect">
-  <div class="lrn-header">
-    <div class="lrn-title-row">
-      <span class="lrn-icon-badge">🎓</span>
-      <div>
-        <h2 class="lrn-title">Learning Mode</h2>
-        <p class="lrn-subtitle">Measure individual device consumption</p>
+<div class="container">
+  <div class="page-title">Device Analytics</div>
+
+  <div class="tab-row">
+    <button class="tab-btn active" id="tab-list"  onclick="switchTab('list')">My Devices</button>
+    <button class="tab-btn"        id="tab-learn" onclick="switchTab('learn')">Learn New</button>
+    <button class="tab-btn"        id="tab-chart" onclick="switchTab('chart')">Consumption</button>
+  </div>
+
+  <!-- ══ TAB 1: LEARNED DEVICES LIST ══ -->
+  <div class="tab-panel active" id="panel-list">
+    <div class="section-card">
+      <div class="section-header">
+        Registered Devices
+        <span id="syncBadge" class="sync-badge" style="display:none;"></span>
       </div>
-    </div>
-    <div class="lrn-tip-box">
-      <span class="lrn-tip-icon">💡</span>
-      <span>Turn off ALL other devices before learning a new one.</span>
-    </div>
-  </div>
-
-  <div class="lrn-section-label">Default Devices</div>
-  <div class="device-grid" id="defaultDeviceGrid">
-    <!-- populated by JS -->
-  </div>
-
-  <div class="lrn-section-label" style="margin-top:20px;">Custom Devices</div>
-  <div class="device-grid" id="customDeviceGrid">
-    <!-- populated by JS -->
-  </div>
-
-  <!-- Add custom device -->
-  <div class="add-device-row">
-    <input type="text" id="customDeviceName" class="lrn-input" placeholder="Enter custom device name…" maxlength="40" />
-    <button class="lrn-btn-add" id="btnAddCustom">＋ Add</button>
-  </div>
-
-  <button class="lrn-btn-primary" id="btnNextLearn" disabled>
-    Next — Start Learning
-    <span class="lrn-selected-tag" id="selectedTag"></span>
-  </button>
-</div>
-
-<!-- ──────────────── STEP 2 : LEARN ──────────────── -->
-<div class="lrn-container" id="stepLearn" style="display:none;">
-  <div class="lrn-learn-card">
-    <div class="lrn-device-name-big" id="learnDeviceName">Device</div>
-    <div class="lrn-learn-hint">Make sure this is the ONLY device running.</div>
-
-    <button class="lrn-big-green-btn" id="btnLearnStart">
-      <span class="lrn-pulse-ring"></span>
-      <span class="lrn-btn-inner-text">LEARN</span>
-    </button>
-
-    <div class="lrn-countdown-wrap" id="learnCountdownWrap" style="display:none;">
-      <div class="lrn-countdown-circle">
-        <svg viewBox="0 0 120 120" class="lrn-svg-ring">
-          <circle class="lrn-ring-bg"   cx="60" cy="60" r="52"/>
-          <circle class="lrn-ring-fill" cx="60" cy="60" r="52" id="learnRingArc"/>
-        </svg>
-        <div class="lrn-countdown-num" id="learnCountdownNum">60</div>
-      </div>
-      <div class="lrn-countdown-label">Recording…</div>
-      <div class="lrn-live-watts">
-        <span class="lrn-live-dot"></span>
-        Live: <span id="learnLiveWatts">--</span> W
+      <div class="section-body p-3" id="learnedListWrap"></div>
+      <div class="empty-state" id="learnedEmptyState" style="display:none;">
+        <div class="empty-icon">🔌</div>
+        <p>No devices learned yet.</p>
+        <button class="btn-primary mt-2" onclick="switchTab('learn')">Learn a Device</button>
       </div>
     </div>
   </div>
 
-  <button class="lrn-btn-ghost" id="btnCancelLearn">✕ Cancel</button>
-</div>
+  <!-- ══ TAB 2: LEARN WIZARD ══ -->
+  <div class="tab-panel" id="panel-learn">
+    <div class="section-card">
+      <div class="section-header" id="learnHeaderTitle">Step 1: Select Device</div>
+      <div class="section-body p-3">
 
-<!-- ──────────────── STEP 3 : RESULT ──────────────── -->
-<div class="lrn-container" id="stepResult" style="display:none;">
-  <div class="lrn-result-card">
-    <div class="lrn-check-anim" id="resultCheckAnim">✓</div>
-    <div class="lrn-result-device" id="resultDeviceName">Device</div>
-    <div class="lrn-result-label">Learning Completed!</div>
+        <!-- STEP A: SELECT -->
+        <div id="stepSelect">
+          <div class="tip-box mb-3">
+            <span>💡</span> Turn off ALL other devices before learning.
+          </div>
+          <div class="section-label">Default Devices</div>
+          <div class="device-grid" id="defaultDeviceGrid"></div>
 
-    <div class="lrn-result-watts-row">
-      <div class="lrn-result-watts-box">
-        <div class="lrn-rwb-label">Measured Power</div>
-        <div class="lrn-rwb-val" id="resultWatts">--</div>
-        <div class="lrn-rwb-unit">Watts</div>
+          <div class="section-label mt-3">Custom Devices</div>
+          <div class="device-grid" id="customDeviceGrid"></div>
+
+          <div class="single-input-row mt-2" style="border:none;padding:0;">
+            <input type="text" id="customDeviceName" placeholder="Custom device name…" maxlength="30"/>
+            <button class="btn-add" id="btnAddCustom">＋ Add</button>
+          </div>
+
+          <button class="btn-primary mt-3" id="btnNextLearn" disabled>
+            Start Learning <span id="selectedTag"></span>
+          </button>
+        </div>
+
+        <!-- STEP B: MEASURE -->
+        <div id="stepLearn" style="display:none;text-align:center;">
+          <h3 class="device-name-big" id="learnDeviceName">Device</h3>
+          <p class="text-warn mb-3">Make sure this is the ONLY device running.</p>
+
+          <button class="btn-big-green mx-auto" id="btnLearnStart">LEARN</button>
+
+          <div id="learnCountdownWrap" style="display:none;">
+            <div class="countdown-circle mx-auto">
+              <svg viewBox="0 0 120 120" class="svg-ring">
+                <circle class="ring-bg"   cx="60" cy="60" r="52"/>
+                <circle class="ring-fill" cx="60" cy="60" r="52" id="learnRingArc"/>
+              </svg>
+              <div class="countdown-num" id="learnCountdownNum">60</div>
+            </div>
+            <div class="live-watts mt-2">
+              <span class="live-dot"></span> Live: <span id="learnLiveWatts">--</span> W
+            </div>
+          </div>
+          <button class="btn-ghost mt-3" id="btnCancelLearn">✕ Cancel</button>
+        </div>
+
+        <!-- STEP C: RESULT -->
+        <div id="stepResult" style="display:none;text-align:center;">
+          <div class="check-anim mx-auto" id="resultCheckAnim">✓</div>
+          <h3 class="device-name-big mt-2" id="resultDeviceName">Device</h3>
+          <p class="text-muted">Learning Completed!</p>
+
+          <div class="result-grid mt-3">
+            <div class="result-box">
+              <div class="rb-label">Baseline (W<sub>prev</sub>)</div>
+              <div class="rb-val text-muted" id="resBase">--</div>
+              <div class="rb-unit">Watts</div>
+            </div>
+            <div class="result-box">
+              <div class="rb-label">Active Avg (W<sub>avg</sub>)</div>
+              <div class="rb-val text-muted" id="resAvg">--</div>
+              <div class="rb-unit">Watts</div>
+            </div>
+          </div>
+
+          <div class="result-box mt-2" style="border-color:#288C40;background:#e9f7dc;">
+            <div class="rb-label text-accent">Device Power (W<sub>avg</sub> − W<sub>prev</sub>)</div>
+            <div class="rb-val text-accent" style="font-size:1.8rem;" id="resFinal">--</div>
+            <div class="rb-unit text-accent">Watts</div>
+          </div>
+
+          <div id="saveStatusMsg" class="save-status-msg" style="display:none;"></div>
+
+          <button class="btn-primary mt-3" onclick="switchTab('list')">View My Devices</button>
+          <button class="btn-ghost mt-2" id="btnLearnAnother">Learn Another</button>
+        </div>
+
       </div>
-      <div class="lrn-result-watts-box">
-        <div class="lrn-rwb-label">Baseline (before)</div>
-        <div class="lrn-rwb-val" id="resultBaseline">--</div>
-        <div class="lrn-rwb-unit">Watts</div>
+    </div>
+  </div>
+
+  <!-- ══ TAB 3: CONSUMPTION CHART ══ -->
+  <div class="tab-panel" id="panel-chart">
+    <div class="section-card">
+      <div class="section-header">Select Date Range</div>
+      <div class="section-body">
+        <div class="date-row">
+          <div class="date-field">
+            <label for="startDate">From</label>
+            <input type="date" id="startDate"/>
+          </div>
+          <div class="date-field">
+            <label for="endDate">To</label>
+            <input type="date" id="endDate"/>
+          </div>
+        </div>
+        <div class="p-2 pt-0">
+          <button class="btn-primary w-100" id="btnRenderChart">Update Chart</button>
+        </div>
       </div>
     </div>
-    <div class="lrn-result-formula">
-      Device W = W<sub>during</sub> − W<sub>baseline</sub>
-    </div>
-  </div>
 
-  <button class="lrn-btn-primary" id="btnViewList">View Learned Devices</button>
-  <button class="lrn-btn-ghost"   id="btnLearnAnother">Learn Another Device</button>
-</div>
-
-<!-- ──────────────── STEP 4 : LEARNED LIST ──────────────── -->
-<div class="lrn-container" id="stepList" style="display:none;">
-  <div class="lrn-header">
-    <div class="lrn-title-row">
-      <span class="lrn-icon-badge">📋</span>
-      <div>
-        <h2 class="lrn-title">Learned Devices</h2>
-        <p class="lrn-subtitle">Tap a device to see details or delete</p>
+    <div class="section-card mt-2">
+      <div class="section-header">Estimated Energy Breakdown</div>
+      <div class="section-body" style="padding:10px;">
+        <div id="pieChart" style="width:100%;height:300px;"></div>
+        <p class="text-center text-muted" style="font-size:0.7rem;margin-top:5px;">
+          *Estimation based on learned watts × 4 hours daily usage.
+        </p>
       </div>
     </div>
   </div>
 
-  <div id="learnedListWrap">
-    <!-- populated by JS -->
-  </div>
+</div><!-- /.container -->
 
-  <div class="lrn-empty-state" id="learnedEmptyState" style="display:none;">
-    <div class="lrn-empty-icon">🔍</div>
-    <div>No devices learned yet.</div>
-    <div class="lrn-empty-sub">Go back and start learning!</div>
-  </div>
-
-  <button class="lrn-btn-primary" style="margin-top:16px;" id="btnLearnNew">
-    ＋ Learn a New Device
-  </button>
-</div>
-
-<!-- ──────────────── DEVICE DETAIL MODAL ──────────────── -->
-<div class="lrn-modal-overlay" id="detailModal" style="display:none;">
-  <div class="lrn-modal">
-    <div class="lrn-modal-icon" id="modalIcon">💡</div>
-    <div class="lrn-modal-name" id="modalDeviceName">Device</div>
-    <div class="lrn-modal-row">
-      <span class="lrn-modal-label">Measured Power</span>
-      <span class="lrn-modal-val" id="modalWatts">-- W</span>
-    </div>
-    <div class="lrn-modal-row">
-      <span class="lrn-modal-label">Baseline</span>
-      <span class="lrn-modal-val" id="modalBaseline">-- W</span>
-    </div>
-    <div class="lrn-modal-row">
-      <span class="lrn-modal-label">Learned on</span>
-      <span class="lrn-modal-val" id="modalDate">--</span>
-    </div>
-    <div class="lrn-modal-row">
-      <span class="lrn-modal-label">Est. per hour</span>
-      <span class="lrn-modal-val" id="modalPerHour">-- kWh</span>
-    </div>
-    <div class="lrn-modal-row">
-      <span class="lrn-modal-label">Est. per day (8h)</span>
-      <span class="lrn-modal-val" id="modalPerDay">-- kWh</span>
-    </div>
-    <button class="lrn-btn-danger" id="modalDeleteBtn">🗑 Delete</button>
-    <button class="lrn-btn-ghost"  id="modalCloseBtn">Close</button>
-  </div>
-</div>
 
 <script>
-// ════════════════════════════════════════════════════════════
-//  CONFIG — shared with homepage
-// ════════════════════════════════════════════════════════════
-var API_BASE  = 'https://energy-app.utech-iiot.lk/api';
-var DEVICE_ID = '422a2800-33cc-11f1-97e7-41e8209c1cc5';
-var LEARN_DURATION_MS = 60000;   // 1 minute recording window
-var LEARN_SAMPLES     = 12;      // readings during recording (every ~5s)
-var STORAGE_KEY       = 'lrn_devices_' + DEVICE_ID;
+// ═══════════════════════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════════════════════
+var API_BASE          = 'https://energy-app.utech-iiot.lk/api';
+var DEVICE_ID         = '422a2800-33cc-11f1-97e7-41e8209c1cc5';
+var SERVER_ATTR_KEY   = 'nilm_learned_devices';   // JSON array — learned devices
+var SERVER_CUSTOM_KEY = 'nilm_custom_devices';    // JSON array — custom device names
+var LEARN_DURATION_MS = 60000;
 
-// ════════════════════════════════════════════════════════════
-//  DEFAULT DEVICES
-// ════════════════════════════════════════════════════════════
 var DEFAULT_DEVICES = [
-  { name:'Refrigerator',      icon:'🧊' },
-  { name:'Air Conditioner',   icon:'❄️' },
-  { name:'Rice Cooker',       icon:'🍚' },
-  { name:'Electric Kettle',   icon:'☕' },
-  { name:'Bread Toaster',     icon:'🍞' },
-  { name:'Iron Box',          icon:'👔' },
-  { name:'Microwave Oven',    icon:'📡' },
-  { name:'Mixer Grinder',     icon:'🔄' },
-  { name:'Washing Machine',   icon:'🫧' },
-  { name:'Electric Bike',     icon:'🛵' },
-  { name:'Electric Car',      icon:'🚗' },
+  { name:'Fridge',     icon:'🧊' },
+  { name:'AC',         icon:'❄️' },
+  { name:'Cooker',     icon:'🍚' },
+  { name:'Kettle',     icon:'☕' },
+  { name:'Iron',       icon:'👔' },
+  { name:'Washing M.', icon:'🫧' }
 ];
 
-// ════════════════════════════════════════════════════════════
-//  STATE
-// ════════════════════════════════════════════════════════════
-var jwtToken        = localStorage.getItem('jwt_token');
-var selectedDevice  = null;   // { name, icon }
-var customDevices   = [];     // [{ name, icon }]
-var learnedDevices  = [];     // [{ name, icon, watts, baseline, date }]
-var learnTimer      = null;
-var learnSamples    = [];
-var baselineWatts   = null;
-var liveWattsPoller = null;
-var currentModal    = null;
+// ═══════════════════════════════════════════════════════════
+//  RUNTIME STATE
+// ═══════════════════════════════════════════════════════════
+var learnedDevices   = [];   // [{name, icon, watts, baseline, date}, …]
+var customDevices    = [];   // [{name, icon}, …]
+var selectedDevice   = null;
+var learnTimer       = null;
+var livePoller       = null;
+var baselineWatts    = null;
+var samples          = [];
+var pieChartInstance = null;
 
-// ════════════════════════════════════════════════════════════
-//  PERSISTENCE — localStorage for learned devices & custom list
-// ════════════════════════════════════════════════════════════
-function loadStorage(){
+// ═══════════════════════════════════════════════════════════
+//  JWT TOKEN HELPER
+// ═══════════════════════════════════════════════════════════
+function getToken() {
   try {
-    var raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){ var obj = JSON.parse(raw); learnedDevices = obj.learned || []; customDevices = obj.custom || []; }
-  } catch(e){ learnedDevices = []; customDevices = []; }
-}
-
-function saveStorage(){
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ learned: learnedDevices, custom: customDevices }));
-  } catch(e){ console.warn('[STORE] save failed', e); }
-}
-
-// ════════════════════════════════════════════════════════════
-//  SIDEBAR
-// ════════════════════════════════════════════════════════════
-var sidebar = document.getElementById('sidebar');
-var sidebarToggle = document.getElementById('sidebarToggle');
-var triggerArea   = document.querySelector('.sidebar-trigger-area');
-function toggleSidebar(){ sidebar.classList.toggle('open'); }
-if(sidebarToggle) sidebarToggle.addEventListener('click', toggleSidebar);
-if(triggerArea)   triggerArea.addEventListener('click',   toggleSidebar);
-document.addEventListener('click', function(e){
-  if(sidebar && sidebar.classList.contains('open') &&
-     !sidebar.contains(e.target) && e.target !== sidebarToggle && e.target !== triggerArea)
-    sidebar.classList.remove('open');
-});
-
-// ════════════════════════════════════════════════════════════
-//  LIVE WATT FETCH
-// ════════════════════════════════════════════════════════════
-function fetchCurrentWatts(cb){
-  if(!jwtToken){ cb(null); return; }
-  var url = API_BASE+'/plugins/telemetry/DEVICE/'+DEVICE_ID
-    +'/values/timeseries?keys=power&limit=1&useStrictDataTypes=false';
-  fetch(url,{headers:{'X-Authorization':'Bearer '+jwtToken}})
-    .then(function(r){ return r.json(); })
-    .then(function(d){
-      var arr = d.power && d.power.length ? d.power : [];
-      var v = arr.length ? parseFloat(arr[0].value) : null;
-      cb(isNaN(v) ? null : v);
-    })
-    .catch(function(){ cb(null); });
-}
-
-// ════════════════════════════════════════════════════════════
-//  STEP NAVIGATION
-// ════════════════════════════════════════════════════════════
-function showStep(id){
-  ['stepSelect','stepLearn','stepResult','stepList'].forEach(function(s){
-    document.getElementById(s).style.display = s===id ? 'block' : 'none';
-  });
-  window.scrollTo(0,0);
-}
-
-// ════════════════════════════════════════════════════════════
-//  STEP 1 — SELECT
-// ════════════════════════════════════════════════════════════
-function renderDeviceGrid(containerId, list){
-  var grid = document.getElementById(containerId);
-  grid.innerHTML = '';
-  list.forEach(function(dev){
-    var alreadyLearned = learnedDevices.some(function(l){ return l.name === dev.name; });
-    var btn = document.createElement('button');
-    btn.className = 'device-card' + (alreadyLearned ? ' learned' : '');
-    btn.innerHTML =
-      '<span class="dc-icon">'+(dev.icon||'🔌')+'</span>'+
-      '<span class="dc-name">'+escHtml(dev.name)+'</span>'+
-      (alreadyLearned ? '<span class="dc-badge">✓</span>' : '');
-    btn.addEventListener('click', function(){ selectDevice(dev, btn); });
-    grid.appendChild(btn);
-  });
-}
-
-function selectDevice(dev, btn){
-  selectedDevice = dev;
-  document.querySelectorAll('.device-card.selected').forEach(function(el){ el.classList.remove('selected'); });
-  btn.classList.add('selected');
-  var tag = document.getElementById('selectedTag');
-  tag.textContent = dev.icon + ' ' + dev.name;
-  document.getElementById('btnNextLearn').disabled = false;
-}
-
-function renderStep1(){
-  renderDeviceGrid('defaultDeviceGrid', DEFAULT_DEVICES);
-  renderDeviceGrid('customDeviceGrid',  customDevices);
-  selectedDevice = null;
-  document.getElementById('btnNextLearn').disabled = true;
-  document.getElementById('selectedTag').textContent = '';
-  document.getElementById('customDeviceName').value = '';
-}
-
-document.getElementById('btnAddCustom').addEventListener('click', function(){
-  var input = document.getElementById('customDeviceName');
-  var name = input.value.trim();
-  if(!name) return;
-  if(customDevices.some(function(d){ return d.name.toLowerCase()===name.toLowerCase(); })){ alert('Device already exists.'); return; }
-  customDevices.push({ name: name, icon: '🔌' });
-  saveStorage();
-  input.value = '';
-  renderDeviceGrid('customDeviceGrid', customDevices);
-});
-
-document.getElementById('btnNextLearn').addEventListener('click', function(){
-  if(!selectedDevice) return;
-  document.getElementById('learnDeviceName').textContent = selectedDevice.icon + ' ' + selectedDevice.name;
-  resetLearnUI();
-  showStep('stepLearn');
-  // Grab baseline immediately
-  fetchCurrentWatts(function(w){
-    baselineWatts = w;
-    console.log('[LEARN] baseline watts:', baselineWatts);
-  });
-});
-
-// ════════════════════════════════════════════════════════════
-//  STEP 2 — LEARN
-// ════════════════════════════════════════════════════════════
-function resetLearnUI(){
-  document.getElementById('btnLearnStart').style.display = 'flex';
-  document.getElementById('learnCountdownWrap').style.display = 'none';
-  document.getElementById('learnCountdownNum').textContent = '60';
-  document.getElementById('learnLiveWatts').textContent = '--';
-  setRingProgress(1);
-  learnSamples = [];
-  if(learnTimer){ clearInterval(learnTimer); learnTimer = null; }
-  if(liveWattsPoller){ clearInterval(liveWattsPoller); liveWattsPoller = null; }
-}
-
-function setRingProgress(fraction){
-  var ring = document.getElementById('learnRingArc');
-  if(!ring) return;
-  var circ = 2 * Math.PI * 52; // r=52
-  ring.style.strokeDasharray  = circ;
-  ring.style.strokeDashoffset = circ * (1 - fraction);
-}
-
-document.getElementById('btnLearnStart').addEventListener('click', function(){
-  document.getElementById('btnLearnStart').style.display = 'none';
-  document.getElementById('learnCountdownWrap').style.display = 'flex';
-
-  var startTime = Date.now();
-  learnSamples  = [];
-
-  // Re-grab baseline right before learning
-  fetchCurrentWatts(function(w){ baselineWatts = w; });
-
-  // Countdown + sampling
-  learnTimer = setInterval(function(){
-    var elapsed   = Date.now() - startTime;
-    var remaining = Math.max(0, Math.ceil((LEARN_DURATION_MS - elapsed) / 1000));
-    document.getElementById('learnCountdownNum').textContent = remaining;
-    setRingProgress(remaining / 60);
-
-    if(elapsed >= LEARN_DURATION_MS){
-      clearInterval(learnTimer); learnTimer = null;
-      clearInterval(liveWattsPoller); liveWattsPoller = null;
-      finishLearning();
+    if (typeof self !== 'undefined' && self.ctx && self.ctx.authService) {
+      return self.ctx.authService.jwtHelper.tokenGetter();
     }
-  }, 250);
+  } catch(e) {}
+  return localStorage.getItem('jwt_token') || '';
+}
 
-  // Sample watts every 5s
-  liveWattsPoller = setInterval(function(){
-    fetchCurrentWatts(function(w){
-      if(w !== null){
-        learnSamples.push(w);
-        document.getElementById('learnLiveWatts').textContent = w.toFixed(1);
-      }
-    });
-  }, 5000);
-  // First sample immediately
-  fetchCurrentWatts(function(w){
-    if(w !== null){ learnSamples.push(w); document.getElementById('learnLiveWatts').textContent = w.toFixed(1); }
-  });
-});
-
-document.getElementById('btnCancelLearn').addEventListener('click', function(){
-  resetLearnUI();
-  showStep('stepSelect');
-  renderStep1();
-});
-
-function finishLearning(){
-  // Average of samples during learning
-  var avg = learnSamples.length
-    ? learnSamples.reduce(function(a,b){ return a+b; }, 0) / learnSamples.length
-    : null;
-
-  var deviceWatts = (avg !== null && baselineWatts !== null)
-    ? Math.max(0, avg - baselineWatts)
-    : avg;
-
-  // Save to learnedDevices
-  var entry = {
-    name:     selectedDevice.name,
-    icon:     selectedDevice.icon,
-    watts:    deviceWatts !== null ? parseFloat(deviceWatts.toFixed(2)) : null,
-    baseline: baselineWatts !== null ? parseFloat(baselineWatts.toFixed(2)) : null,
-    date:     new Date().toLocaleString()
+// ═══════════════════════════════════════════════════════════
+//  TB READ — generic single attribute fetch
+// ═══════════════════════════════════════════════════════════
+function tbReadAttr(key, cb) {
+  var url = API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID
+          + '/values/attributes/SERVER_SCOPE?keys=' + key;
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.setRequestHeader('X-Authorization', 'Bearer ' + getToken());
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (xhr.status === 200) {
+      try {
+        var resp = JSON.parse(xhr.responseText);
+        if (resp && resp.length > 0 && resp[0].value) {
+          var arr = JSON.parse(resp[0].value);
+          return cb(Array.isArray(arr) ? arr : []);
+        }
+      } catch(e) {}
+    }
+    cb([]);
   };
-
-  // Replace if already exists
-  learnedDevices = learnedDevices.filter(function(d){ return d.name !== entry.name; });
-  learnedDevices.push(entry);
-  saveStorage();
-
-  // Show result
-  document.getElementById('resultDeviceName').textContent = entry.icon + ' ' + entry.name;
-  document.getElementById('resultWatts').textContent   = entry.watts    !== null ? entry.watts.toFixed(1)    : '--';
-  document.getElementById('resultBaseline').textContent = entry.baseline !== null ? entry.baseline.toFixed(1) : '--';
-  triggerCheckAnim();
-  showStep('stepResult');
+  xhr.onerror = function() { cb([]); };
+  xhr.send();
 }
 
-function triggerCheckAnim(){
-  var el = document.getElementById('resultCheckAnim');
-  el.classList.remove('pop');
-  void el.offsetWidth;
-  el.classList.add('pop');
+// ═══════════════════════════════════════════════════════════
+//  TB WRITE — generic attribute save (key → JSON array)
+// ═══════════════════════════════════════════════════════════
+function tbWriteAttr(key, arr, cb) {
+  var url  = API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID + '/attributes/SERVER_SCOPE';
+  var body = {};
+  body[key] = JSON.stringify(arr);
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', url, true);
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.setRequestHeader('X-Authorization', 'Bearer ' + getToken());
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    if (cb) cb(xhr.status === 200);
+  };
+  xhr.onerror = function() { if (cb) cb(false); };
+  xhr.send(JSON.stringify(body));
 }
 
-// ════════════════════════════════════════════════════════════
-//  STEP 3 — RESULT
-// ════════════════════════════════════════════════════════════
-document.getElementById('btnViewList').addEventListener('click', function(){
-  renderLearnedList();
-  showStep('stepList');
-});
-document.getElementById('btnLearnAnother').addEventListener('click', function(){
-  renderStep1();
-  showStep('stepSelect');
-});
+// Convenience wrappers
+function tbLoadLearnedDevices(cb)  { tbReadAttr(SERVER_ATTR_KEY,   cb); }
+function tbSaveLearnedDevices(cb)  { tbWriteAttr(SERVER_ATTR_KEY,   learnedDevices, cb); }
+function tbLoadCustomDevices(cb)   { tbReadAttr(SERVER_CUSTOM_KEY,  cb); }
+function tbSaveCustomDevices(cb)   { tbWriteAttr(SERVER_CUSTOM_KEY, customDevices,  cb); }
 
-// ════════════════════════════════════════════════════════════
-//  STEP 4 — LEARNED LIST
-// ════════════════════════════════════════════════════════════
-function renderLearnedList(){
+// ═══════════════════════════════════════════════════════════
+//  SYNC STATUS BADGE
+// ═══════════════════════════════════════════════════════════
+function showSyncBadge(text, color) {
+  var badge = document.getElementById('syncBadge');
+  if (!badge) return;
+  badge.textContent = text;
+  badge.style.display = 'inline-block';
+  badge.style.background = color || '#e6f4ea';
+  badge.style.color = color === '#fde8e8' ? '#c0392b' : '#288C40';
+  clearTimeout(badge._hide);
+  badge._hide = setTimeout(function() { badge.style.display = 'none'; }, 3000);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  DATE INIT
+// ═══════════════════════════════════════════════════════════
+function initDates() {
+  var today = new Date();
+  var first = new Date(today.getFullYear(), today.getMonth(), 1);
+  var fmt = function(d) {
+    return d.getFullYear() + '-'
+         + String(d.getMonth() + 1).padStart(2, '0') + '-'
+         + String(d.getDate()).padStart(2, '0');
+  };
+  document.getElementById('startDate').value = fmt(first);
+  document.getElementById('endDate').value   = fmt(today);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ═══════════════════════════════════════════════════════════
+function switchTab(tabId) {
+  ['list', 'learn', 'chart'].forEach(function(t) {
+    document.getElementById('tab-'   + t).classList.toggle('active', t === tabId);
+    document.getElementById('panel-' + t).classList.toggle('active', t === tabId);
+  });
+  if (tabId === 'list')  renderList();
+  if (tabId === 'learn') showStep('stepSelect');
+  if (tabId === 'chart') setTimeout(renderChart, 100);
+}
+
+function showStep(stepId) {
+  ['stepSelect', 'stepLearn', 'stepResult'].forEach(function(s) {
+    document.getElementById(s).style.display = (s === stepId) ? 'block' : 'none';
+  });
+  var titles = { stepSelect:'Step 1: Select Device', stepLearn:'Step 2: Measure', stepResult:'Step 3: Result' };
+  document.getElementById('learnHeaderTitle').textContent = titles[stepId] || '';
+  if (stepId === 'stepSelect') renderGrids();
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TAB 1 — LIST & DELETE LEARNED DEVICE
+// ═══════════════════════════════════════════════════════════
+function renderList() {
   var wrap  = document.getElementById('learnedListWrap');
   var empty = document.getElementById('learnedEmptyState');
   wrap.innerHTML = '';
 
-  if(!learnedDevices.length){
-    empty.style.display = 'flex';
+  if (!learnedDevices.length) {
+    empty.style.display = 'block';
     return;
   }
   empty.style.display = 'none';
 
-  // Sort by watts desc
-  var sorted = learnedDevices.slice().sort(function(a,b){ return (b.watts||0)-(a.watts||0); });
+  var sorted = learnedDevices.slice().sort(function(a, b) {
+    return (b.watts || 0) - (a.watts || 0);
+  });
 
-  sorted.forEach(function(dev){
-    var pct = Math.min((dev.watts||0) / 3000, 1);
-    var bar = document.createElement('div');
-    bar.className = 'learned-card';
-    bar.innerHTML =
-      '<div class="lc-left">'+
-        '<span class="lc-icon">'+(dev.icon||'🔌')+'</span>'+
-        '<div class="lc-info">'+
-          '<div class="lc-name">'+escHtml(dev.name)+'</div>'+
-          '<div class="lc-date">'+escHtml(dev.date||'')+'</div>'+
-          '<div class="lc-bar-wrap"><div class="lc-bar" style="width:'+(pct*100)+'%"></div></div>'+
-        '</div>'+
-      '</div>'+
-      '<div class="lc-right">'+
-        '<div class="lc-watts">'+(dev.watts !== null ? dev.watts.toFixed(0) : '--')+'</div>'+
-        '<div class="lc-wlabel">W</div>'+
-      '</div>';
-    bar.addEventListener('click', function(){ openModal(dev); });
-    wrap.appendChild(bar);
+  sorted.forEach(function(dev) {
+    var div = document.createElement('div');
+    div.className = 'list-item';
+    div.innerHTML =
+      '<div class="li-left">'
+      + '<span class="dc-icon">' + dev.icon + '</span>'
+      + '<div>'
+      + '<div class="li-name">' + dev.name + '</div>'
+      + '<div style="font-size:0.65rem;color:#888;">' + (dev.date || '') + '</div>'
+      + '</div>'
+      + '</div>'
+      + '<div class="li-right">'
+      + '<div class="li-watts">' + (dev.watts !== null ? dev.watts.toFixed(0) : '--') + ' W</div>'
+      + '<button class="btn-delete-red" title="Delete ' + dev.name + '" data-name="' + dev.name + '">✕</button>'
+      + '</div>';
+    wrap.appendChild(div);
+  });
+
+  wrap.querySelectorAll('.btn-delete-red').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      deleteLearnedDevice(btn.getAttribute('data-name'));
+    });
   });
 }
 
-document.getElementById('btnLearnNew').addEventListener('click', function(){
-  renderStep1();
+function deleteLearnedDevice(name) {
+  if (!confirm('Delete learned data for ' + name + '?')) return;
+
+  learnedDevices = learnedDevices.filter(function(d) { return d.name !== name; });
+  showSyncBadge('⏳ Saving…', '#fff8e1');
+
+  tbSaveLearnedDevices(function(ok) {
+    showSyncBadge(ok ? '✓ Deleted from server' : '⚠ Delete failed', ok ? '#e6f4ea' : '#fde8e8');
+    renderList();
+    renderGrids();
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  TAB 2 — LEARN WIZARD
+// ═══════════════════════════════════════════════════════════
+function renderGrids() {
+  function buildGrid(containerId, list, allowDelete) {
+    var el = document.getElementById(containerId);
+    el.innerHTML = list.map(function(dev) {
+      var isLearned = learnedDevices.some(function(d) { return d.name === dev.name; });
+      var deleteBtn = allowDelete
+        ? '<button class="dc-delete-btn" title="Remove ' + dev.name + '" data-name="' + dev.name + '">✕</button>'
+        : '';
+      return '<div class="device-card' + (isLearned ? ' learned' : '') + '"'
+           + ' data-select-name="' + dev.name + '" data-select-icon="' + dev.icon + '">'
+           + deleteBtn
+           + '<span class="dc-icon" style="pointer-events:none;">' + dev.icon + '</span>'
+           + '<span class="dc-name" style="pointer-events:none;">' + dev.name + '</span>'
+           + (isLearned ? '<span class="dc-badge">✓</span>' : '')
+           + '</div>';
+    }).join('');
+
+    // Select handler — only on the card itself (not the delete button)
+    el.querySelectorAll('.device-card').forEach(function(card) {
+      card.addEventListener('click', function(e) {
+        if (e.target.classList.contains('dc-delete-btn')) return;
+        var n = card.getAttribute('data-select-name');
+        var i = card.getAttribute('data-select-icon');
+        selectDev(n, i, card);
+      });
+    });
+
+    // Delete handler for custom devices
+    if (allowDelete) {
+      el.querySelectorAll('.dc-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          deleteCustomDevice(btn.getAttribute('data-name'));
+        });
+      });
+    }
+  }
+
+  buildGrid('defaultDeviceGrid', DEFAULT_DEVICES, false);
+  buildGrid('customDeviceGrid',  customDevices,   true);
+
+  selectedDevice = null;
+  document.getElementById('btnNextLearn').disabled = true;
+  document.getElementById('selectedTag').textContent = '';
+}
+
+function selectDev(name, icon, el) {
+  selectedDevice = { name: name, icon: icon };
+  document.querySelectorAll('.device-card').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+  document.getElementById('selectedTag').textContent = '(' + icon + ' ' + name + ')';
+  document.getElementById('btnNextLearn').disabled = false;
+}
+
+// ── Add custom device (save to server) ───────────────────
+document.getElementById('btnAddCustom').addEventListener('click', function() {
+  var input = document.getElementById('customDeviceName');
+  var name  = input.value.trim();
+  if (!name) return;
+  var exists = customDevices.some(function(d) { return d.name.toLowerCase() === name.toLowerCase(); })
+             || DEFAULT_DEVICES.some(function(d) { return d.name.toLowerCase() === name.toLowerCase(); });
+  if (exists) { alert('A device with that name already exists.'); return; }
+
+  customDevices.push({ name: name, icon: '🔌' });
+  input.value = '';
+  showSyncBadge('⏳ Saving…', '#fff8e1');
+
+  tbSaveCustomDevices(function(ok) {
+    showSyncBadge(ok ? '✓ Saved to server' : '⚠ Server save failed', ok ? '#e6f4ea' : '#fde8e8');
+    renderGrids();
+  });
+});
+
+// ── Delete custom device (save to server) ───────────────
+function deleteCustomDevice(name) {
+  if (!confirm('Remove custom device "' + name + '"?\nIf it has learned data, that will remain.')) return;
+
+  customDevices = customDevices.filter(function(d) { return d.name !== name; });
+  showSyncBadge('⏳ Saving…', '#fff8e1');
+
+  tbSaveCustomDevices(function(ok) {
+    showSyncBadge(ok ? '✓ Removed from server' : '⚠ Remove failed', ok ? '#e6f4ea' : '#fde8e8');
+    renderGrids();
+  });
+}
+
+// ── Live watt fetch ──────────────────────────────────────
+function fetchWatts(cb) {
+  var token = getToken();
+  if (!token) return cb(null);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', API_BASE + '/plugins/telemetry/DEVICE/' + DEVICE_ID
+         + '/values/timeseries?keys=power&limit=1', true);
+  xhr.setRequestHeader('X-Authorization', 'Bearer ' + token);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState !== 4) return;
+    try {
+      var d   = JSON.parse(xhr.responseText);
+      var arr = d.power || [];
+      cb(arr.length ? parseFloat(arr[0].value) : null);
+    } catch(e) { cb(null); }
+  };
+  xhr.onerror = function() { cb(null); };
+  xhr.send();
+}
+
+// ── Proceed to measure step ──────────────────────────────
+document.getElementById('btnNextLearn').addEventListener('click', function() {
+  document.getElementById('learnDeviceName').textContent =
+    selectedDevice.icon + ' ' + selectedDevice.name;
+  document.getElementById('btnLearnStart').style.display      = 'flex';
+  document.getElementById('learnCountdownWrap').style.display = 'none';
+  showStep('stepLearn');
+  fetchWatts(function(w) { baselineWatts = w; });
+});
+
+// ── Start recording ──────────────────────────────────────
+document.getElementById('btnLearnStart').addEventListener('click', function() {
+  document.getElementById('btnLearnStart').style.display      = 'none';
+  document.getElementById('learnCountdownWrap').style.display = 'block';
+
+  var start = Date.now();
+  samples   = [];
+  fetchWatts(function(w) { baselineWatts = w; });
+
+  learnTimer = setInterval(function() {
+    var elap = Date.now() - start;
+    var rem  = Math.max(0, Math.ceil((LEARN_DURATION_MS - elap) / 1000));
+    document.getElementById('learnCountdownNum').textContent = rem;
+
+    var ring  = document.getElementById('learnRingArc');
+    var circ  = 2 * Math.PI * 52;
+    ring.style.strokeDasharray  = circ;
+    ring.style.strokeDashoffset = circ * (1 - rem / 60);
+
+    if (elap >= LEARN_DURATION_MS) endLearning();
+  }, 250);
+
+  var poll = function() {
+    fetchWatts(function(w) {
+      if (w !== null) {
+        samples.push(w);
+        document.getElementById('learnLiveWatts').textContent = w.toFixed(1);
+      }
+    });
+  };
+  livePoller = setInterval(poll, 5000);
+  poll();
+});
+
+// ── Finish learning — calculate, save to server ──────────
+function endLearning() {
+  clearInterval(learnTimer);
+  clearInterval(livePoller);
+
+  var base   = baselineWatts !== null ? baselineWatts : 0;
+  var avg    = 0;
+  var finalW = 0;
+
+  if (samples.length > 0) {
+    var maxSample = Math.max.apply(null, samples);
+    if (maxSample - base > 2) {
+      var threshold     = base + (maxSample - base) * 0.4;
+      var activeSamples = samples.filter(function(w) { return w >= threshold; });
+      avg = activeSamples.reduce(function(a, b) { return a + b; }, 0) / activeSamples.length;
+    } else {
+      avg = samples.reduce(function(a, b) { return a + b; }, 0) / samples.length;
+    }
+    finalW = Math.max(0, avg - base);
+  }
+
+  var entry = {
+    name:     selectedDevice.name,
+    icon:     selectedDevice.icon,
+    watts:    parseFloat(finalW.toFixed(2)),
+    baseline: parseFloat(base.toFixed(2)),
+    date:     new Date().toLocaleDateString()
+  };
+
+  learnedDevices = learnedDevices.filter(function(d) { return d.name !== entry.name; });
+  learnedDevices.push(entry);
+
+  var msgEl = document.getElementById('saveStatusMsg');
+  msgEl.style.display = 'block';
+  msgEl.className     = 'save-status-msg saving';
+  msgEl.textContent   = '⏳ Saving to server…';
+
+  tbSaveLearnedDevices(function(ok) {
+    if (ok) {
+      msgEl.className   = 'save-status-msg success';
+      msgEl.textContent = '✓ Saved to ThingsBoard server attribute';
+    } else {
+      msgEl.className   = 'save-status-msg error';
+      msgEl.textContent = '⚠ Server save failed — data kept in memory only';
+    }
+  });
+
+  document.getElementById('resultDeviceName').textContent = entry.icon + ' ' + entry.name;
+  document.getElementById('resBase').textContent  = base.toFixed(1);
+  document.getElementById('resAvg').textContent   = avg.toFixed(1);
+  document.getElementById('resFinal').textContent = finalW.toFixed(1);
+
+  showStep('stepResult');
+}
+
+document.getElementById('btnCancelLearn').addEventListener('click', function() {
+  clearInterval(learnTimer);
+  clearInterval(livePoller);
   showStep('stepSelect');
 });
 
-// ════════════════════════════════════════════════════════════
-//  MODAL
-// ════════════════════════════════════════════════════════════
-function openModal(dev){
-  currentModal = dev;
-  document.getElementById('modalIcon').textContent       = dev.icon||'🔌';
-  document.getElementById('modalDeviceName').textContent = dev.name;
-  document.getElementById('modalWatts').textContent      = dev.watts    !== null ? dev.watts.toFixed(1)+' W'    : '--';
-  document.getElementById('modalBaseline').textContent   = dev.baseline !== null ? dev.baseline.toFixed(1)+' W' : '--';
-  document.getElementById('modalDate').textContent       = dev.date||'--';
-  var perHour = dev.watts !== null ? (dev.watts / 1000).toFixed(4) : '--';
-  var perDay  = dev.watts !== null ? ((dev.watts / 1000)*8).toFixed(3) : '--';
-  document.getElementById('modalPerHour').textContent = perHour + (dev.watts!==null?' kWh':'');
-  document.getElementById('modalPerDay').textContent  = perDay  + (dev.watts!==null?' kWh':'');
-  document.getElementById('detailModal').style.display = 'flex';
+document.getElementById('btnLearnAnother').addEventListener('click', function() {
+  showStep('stepSelect');
+});
+
+// ═══════════════════════════════════════════════════════════
+//  TAB 3 — CONSUMPTION PIE CHART
+// ═══════════════════════════════════════════════════════════
+function renderChart() {
+  var chartDom = document.getElementById('pieChart');
+  if (!pieChartInstance) pieChartInstance = echarts.init(chartDom);
+
+  var sv = document.getElementById('startDate').value;
+  var ev = document.getElementById('endDate').value;
+  if (!sv || !ev) return;
+
+  var days = Math.max(1,
+    (new Date(ev) - new Date(sv)) / (1000 * 60 * 60 * 24) + 1
+  );
+
+  var chartData = learnedDevices
+    .map(function(d) {
+      return {
+        value: d.watts ? parseFloat(((d.watts * 4 * days) / 1000).toFixed(2)) : 0,
+        name: d.name
+      };
+    })
+    .filter(function(d) { return d.value > 0; });
+
+  if (!chartData.length) {
+    pieChartInstance.clear();
+    document.getElementById('pieChart').innerHTML =
+      '<div style="text-align:center;padding-top:100px;color:#aaa;">'
+      + 'No data to chart. Learn devices first.</div>';
+    return;
+  }
+
+  pieChartInstance.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} kWh ({d}%)' },
+    legend:  {
+      bottom: '0%', left: 'center', itemWidth: 10, itemHeight: 10,
+      textStyle: { fontSize: 10 }
+    },
+    color: ['#288C40','#75B739','#e55353','#f5a623','#4a418a','#16a34a','#d97706'],
+    series: [{
+      type: 'pie', radius: ['40%','70%'], center: ['50%','40%'],
+      avoidLabelOverlap: false,
+      itemStyle: { borderRadius: 5, borderColor: '#fff', borderWidth: 2 },
+      label: { show: false },
+      emphasis: { label: { show: true, fontSize: 14, fontWeight: 'bold' } },
+      data: chartData
+    }]
+  });
 }
 
-document.getElementById('modalCloseBtn').addEventListener('click', function(){
-  document.getElementById('detailModal').style.display = 'none';
-  currentModal = null;
-});
-document.getElementById('detailModal').addEventListener('click', function(e){
-  if(e.target === this){ this.style.display='none'; currentModal=null; }
-});
-document.getElementById('modalDeleteBtn').addEventListener('click', function(){
-  if(!currentModal) return;
-  if(!confirm('Delete "'+currentModal.name+'" from learned devices?')) return;
-  learnedDevices = learnedDevices.filter(function(d){ return d.name !== currentModal.name; });
-  saveStorage();
-  document.getElementById('detailModal').style.display = 'none';
-  currentModal = null;
-  renderLearnedList();
+document.getElementById('btnRenderChart').addEventListener('click', renderChart);
+window.addEventListener('resize', function() {
+  if (pieChartInstance) pieChartInstance.resize();
 });
 
-// ════════════════════════════════════════════════════════════
-//  UTILS
-// ════════════════════════════════════════════════════════════
-function escHtml(s){
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+// ═══════════════════════════════════════════════════════════
+//  BOOT SEQUENCE
+//  1. Load learned devices from server
+//  2. Load custom devices from server
+//  3. Render initial view
+// ═══════════════════════════════════════════════════════════
+function boot() {
+  initDates();
+
+  document.getElementById('learnedListWrap').innerHTML =
+    '<div style="text-align:center;padding:30px;color:#aaa;font-size:0.85rem;">'
+    + '⏳ Loading from server…</div>';
+  document.getElementById('learnedEmptyState').style.display = 'none';
+
+  tbLoadLearnedDevices(function(arr) {
+    learnedDevices = arr;
+    tbLoadCustomDevices(function(customs) {
+      customDevices = customs;
+      switchTab('list');
+    });
+  });
 }
 
-// ════════════════════════════════════════════════════════════
-//  INIT
-// ════════════════════════════════════════════════════════════
-loadStorage();
-renderStep1();
-showStep('stepSelect');
+boot();
+
+// Hide ThingsBoard "Powered by" footer
+function hideFooter() {
+  var el = document.querySelector('section.tb-powered-by-footer');
+  if (el) el.style.display = 'none';
+  else setTimeout(hideFooter, 500);
+}
+hideFooter();
 </script>
