@@ -32,7 +32,6 @@
     </button>
     <button class="em-tab" id="tab-alerts" onclick="emSwitch('alerts')">
       <span class="em-ti">🔔</span>Alerts
-      <span class="em-ndot" id="emNotifDot"></span>
     </button>
     <button class="em-tab" id="tab-chart" onclick="emSwitch('chart')">
       <span class="em-ti">📊</span>Chart
@@ -94,27 +93,6 @@
        ══════════════════════════════════════ -->
   <div class="em-panel" id="panel-alerts">
 
-    <!-- Live Power Ring -->
-    <div class="em-card">
-      <div class="em-ch">Live Power Status</div>
-      <div class="em-cb em-center">
-        <div class="em-ring-wrap">
-          <svg viewBox="0 0 160 160" class="em-ring-svg">
-            <circle class="em-rt" cx="80" cy="80" r="66"/>
-            <circle class="em-rp" cx="80" cy="80" r="66" id="emRingP"/>
-          </svg>
-          <div class="em-ring-inner">
-            <div class="em-ring-w" id="emRingW">--</div>
-            <div class="em-ring-u">Watts</div>
-          </div>
-        </div>
-        <div class="em-sev-row" id="emSevRow">
-          <span class="em-sev-icon" id="emSevIcon">⚪</span>
-          <span class="em-sev-lbl" id="emSevLbl">Reading…</span>
-        </div>
-      </div>
-    </div>
-
     <!-- Threshold Toggles -->
     <div class="em-card">
       <div class="em-ch">Notification Thresholds</div>
@@ -130,14 +108,6 @@
       <div class="em-cb" id="emSevBreak"></div>
     </div>
 
-    <!-- Notification Log -->
-    <div class="em-card">
-      <div class="em-ch">
-        Recent Alerts
-        <button class="em-btn-xs" id="emBtnClr">Clear</button>
-      </div>
-      <div id="emNLog"><div class="em-hint em-center" style="padding:14px;">No alerts yet</div></div>
-    </div>
   </div>
 
   <!-- ══════════════════════════════════════
@@ -174,9 +144,9 @@
       <div class="em-cb" style="padding:8px 10px;">
         <div id="emBarChart" style="width:100%;height:290px;"></div>
         <div class="em-legend">
-          <span class="em-li"><span class="em-ld" style="background:#22c55e;"></span>&lt;500W Minor</span>
-          <span class="em-li"><span class="em-ld" style="background:#eab308;"></span>500–1000W</span>
-          <span class="em-li"><span class="em-ld" style="background:#f97316;"></span>1000–2500W</span>
+          <span class="em-li"><span class="em-ld" style="background:#22c55e;"></span>&lt;1000W Minor</span>
+          <span class="em-li"><span class="em-ld" style="background:#eab308;"></span>1000–1500W</span>
+          <span class="em-li"><span class="em-ld" style="background:#f97316;"></span>1500–2500W</span>
           <span class="em-li"><span class="em-ld" style="background:#ef4444;"></span>&gt;2500W Critical</span>
         </div>
       </div>
@@ -201,14 +171,15 @@ const EM_API       = 'https://energy-app.utech-iiot.lk/api';
 const EM_DEV_ID    = '422a2800-33cc-11f1-97e7-41e8209c1cc5';
 const KEY_DEVICES  = 'em_registered_devices';
 const KEY_NOTIF    = 'em_notification_config';
+const KEY_THRESH   = 'em_thresholds';
 
 // ═══════════════════════════════════════════════════════
-//  SEVERITY LEVELS
+//  SEVERITY LEVELS  (updated thresholds)
 // ═══════════════════════════════════════════════════════
 const SEV = [
-  { id:'minor',    label:'Minor',    icon:'🟢', min:0,    max:500,      color:'#22c55e', bg:'#f0fdf4', tbSev:'INDETERMINATE' },
-  { id:'moderate', label:'Moderate', icon:'🟡', min:500,  max:1000,     color:'#eab308', bg:'#fefce8', tbSev:'WARNING' },
-  { id:'major',    label:'Major',    icon:'🟠', min:1000, max:2500,     color:'#f97316', bg:'#fff7ed', tbSev:'MAJOR' },
+  { id:'minor',    label:'Minor',    icon:'🟢', min:0,    max:1000,     color:'#22c55e', bg:'#f0fdf4', tbSev:'INDETERMINATE' },
+  { id:'moderate', label:'Moderate', icon:'🟡', min:1000, max:1500,     color:'#eab308', bg:'#fefce8', tbSev:'WARNING' },
+  { id:'major',    label:'Major',    icon:'🟠', min:1500, max:2500,     color:'#f97316', bg:'#fff7ed', tbSev:'MAJOR' },
   { id:'critical', label:'Critical', icon:'🔴', min:2500, max:Infinity, color:'#ef4444', bg:'#fef2f2', tbSev:'CRITICAL' }
 ];
 
@@ -239,9 +210,7 @@ const DEFAULTS = [
 // ═══════════════════════════════════════════════════════
 let devices     = [];
 let notifCfg    = { minor:true, moderate:true, major:true, critical:true };
-let nLog        = [];
 let liveWatts   = null;
-let lastSevId   = null;
 let liveTimer   = null;
 let barChart    = null;
 
@@ -305,15 +274,14 @@ function getSev(w) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  UPDATE LIVE STRIP  (top of page + alerts ring)
+//  UPDATE LIVE STRIP
 // ═══════════════════════════════════════════════════════
 function updateLive(w) {
   liveWatts = w;
   const sev = getSev(w);
 
-  // Live strip
-  const vEl = document.getElementById('emLiveVal');
-  const bEl = document.getElementById('emLiveBadge');
+  const vEl  = document.getElementById('emLiveVal');
+  const bEl  = document.getElementById('emLiveBadge');
   const strip = document.getElementById('emLiveStrip');
   if (vEl) vEl.textContent = w !== null ? w.toFixed(0) + ' W' : '-- W';
   if (bEl && sev) {
@@ -323,66 +291,6 @@ function updateLive(w) {
     bEl.style.border = '1px solid ' + sev.color + '44';
   }
   if (strip && sev) strip.style.borderBottom = '2px solid ' + sev.color + '55';
-
-  // Alerts ring (only if panel is active)
-  const rw = document.getElementById('emRingW');
-  const rp = document.getElementById('emRingP');
-  const si = document.getElementById('emSevIcon');
-  const sl = document.getElementById('emSevLbl');
-
-  if (rw) rw.textContent = w !== null ? w.toFixed(0) : '--';
-  if (rp && w !== null) {
-    const circ = 2 * Math.PI * 66;
-    const pct  = Math.min(1, w / 3500);
-    rp.style.strokeDasharray  = circ;
-    rp.style.strokeDashoffset = circ * (1 - pct);
-    rp.style.stroke = sev ? sev.color : '#d1d5db';
-  }
-  if (si) si.textContent = sev ? sev.icon : '⚪';
-  if (sl) sl.textContent = sev
-    ? sev.label + ' (' + sev.min + '–' + (sev.max === Infinity ? '∞' : sev.max) + 'W)'
-    : 'Reading…';
-
-  // Check alerts
-  if (w !== null && sev && notifCfg[sev.id] && sev.id !== lastSevId) {
-    lastSevId = sev.id;
-    pushAlert(w, sev);
-  }
-  if (sev && sev.id !== lastSevId) lastSevId = sev.id;
-}
-
-// ═══════════════════════════════════════════════════════
-//  PUSH ALERT
-// ═══════════════════════════════════════════════════════
-function pushAlert(w, sev) {
-  const entry = {
-    ts:    Date.now(),
-    time:  new Date().toLocaleTimeString(),
-    date:  new Date().toLocaleDateString(),
-    watts: w.toFixed(0),
-    sev
-  };
-  nLog.unshift(entry);
-  if (nLog.length > 40) nLog.pop();
-
-  const dot = document.getElementById('emNotifDot');
-  if (dot) dot.classList.add('visible');
-
-  renderNLog();
-
-  // Create ThingsBoard alarm
-  const alarm = {
-    type: 'POWER_SPIKE',
-    originator: { entityType:'DEVICE', id: EM_DEV_ID },
-    severity: sev.tbSev,
-    status: 'ACTIVE_UNACK',
-    details: {
-      power: w,
-      level: sev.label,
-      message: `Power spike: ${w.toFixed(0)}W — ${sev.label}`
-    }
-  };
-  xhr('POST', `${EM_API}/alarm`, alarm, () => {});
 }
 
 // ═══════════════════════════════════════════════════════
@@ -397,10 +305,6 @@ function emSwitch(id) {
   if (id === 'add')     renderDefGrid();
   if (id === 'alerts')  renderAlerts();
   if (id === 'chart')   setTimeout(renderChart, 80);
-  if (id === 'alerts') {
-    const dot = document.getElementById('emNotifDot');
-    if (dot) dot.classList.remove('visible');
-  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -496,9 +400,9 @@ document.getElementById('emBtnCustom')?.addEventListener('click', () => {
   const name  = document.getElementById('emCName').value.trim();
   const watts = parseFloat(document.getElementById('emCWatts').value);
   const icon  = document.getElementById('emCIcon').value;
-  if (!name)          return toast('Enter a device name', false);
+  if (!name)               return toast('Enter a device name', false);
   if (!watts || watts <= 0) return toast('Enter valid wattage', false);
-  if (hasDevice(name)) return toast('Device already exists', false);
+  if (hasDevice(name))     return toast('Device already exists', false);
   devices.push({ name, icon, watts, addedDate: new Date().toLocaleDateString() });
   document.getElementById('emCName').value  = '';
   document.getElementById('emCWatts').value = '';
@@ -513,10 +417,8 @@ document.getElementById('emBtnCustom')?.addEventListener('click', () => {
 //  PANEL 3 — ALERTS
 // ═══════════════════════════════════════════════════════
 function renderAlerts() {
-  updateLive(liveWatts);
   renderThresh();
   renderSevBreak();
-  renderNLog();
 }
 
 function renderThresh() {
@@ -563,31 +465,31 @@ function renderSevBreak() {
   el.innerHTML = html || '<div class="em-hint">No devices categorized.</div>';
 }
 
-function renderNLog() {
-  const el = document.getElementById('emNLog');
-  if (!el) return;
-  if (!nLog.length) { el.innerHTML = '<div class="em-hint em-center" style="padding:14px;">No alerts yet</div>'; return; }
-  el.innerHTML = nLog.map(n => `
-    <div class="em-nrow" style="border-left:3px solid ${n.sev.color};background:${n.sev.bg};">
-      <span style="font-size:1.2rem;">${n.sev.icon}</span>
-      <div style="flex:1;">
-        <div class="em-ntitle">${n.sev.label} — ${n.watts}W</div>
-        <div class="em-ntime">${n.date} · ${n.time}</div>
-      </div>
-      <span class="em-chip" style="background:${n.sev.bg};color:${n.sev.color};border-color:${n.sev.color}33;">${n.sev.label}</span>
-    </div>`).join('');
-}
-
+// Save thresholds — writes notifCfg + the SEV threshold boundaries to server attributes
 document.getElementById('emBtnSaveThr')?.addEventListener('click', () => {
   SEV.forEach(s => {
     const cb = document.getElementById('thr-' + s.id);
     if (cb) notifCfg[s.id] = cb.checked;
   });
-  writeAttr(KEY_NOTIF, notifCfg, ok => toast(ok ? '✓ Settings saved' : '⚠ Save failed', ok));
-});
 
-document.getElementById('emBtnClr')?.addEventListener('click', () => {
-  nLog = []; lastSevId = null; renderNLog();
+  // Build threshold boundaries object for rule chain consumption
+  const thresholds = {
+    minor_max:    1000,
+    moderate_min: 1000,
+    moderate_max: 1500,
+    major_min:    1500,
+    major_max:    2500,
+    critical_min: 2500
+  };
+
+  // Save notification toggle config
+  writeAttr(KEY_NOTIF, notifCfg, ok1 => {
+    // Save threshold boundaries
+    writeAttr(KEY_THRESH, thresholds, ok2 => {
+      const ok = ok1 && ok2;
+      toast(ok ? '✓ Settings saved to server' : '⚠ Save failed', ok);
+    });
+  });
 });
 
 // ═══════════════════════════════════════════════════════
@@ -695,7 +597,7 @@ function renderChart() {
       },
       series: [{
         type: 'bar',
-        data: vals.map((v, i) => ({
+        data: vals.map((v) => ({
           value: v,
           itemStyle: { color: barColor(v), borderRadius: [3,3,0,0] }
         })),
@@ -705,10 +607,9 @@ function renderChart() {
           silent: true,
           symbol: 'none',
           data: [
-            { yAxis:500,  lineStyle:{ color:'#22c55e', type:'dashed', width:1 }, label:{ formatter:'500W', color:'#22c55e', fontSize:9, position:'insideEndTop' } },
-            { yAxis:1000, lineStyle:{ color:'#eab308', type:'dashed', width:1 }, label:{ formatter:'1kW',  color:'#eab308', fontSize:9, position:'insideEndTop' } },
-            { yAxis:1500, lineStyle:{ color:'#f97316', type:'dashed', width:1 }, label:{ formatter:'1.5kW',color:'#f97316', fontSize:9, position:'insideEndTop' } },
-            { yAxis:2500, lineStyle:{ color:'#ef4444', type:'dashed', width:1 }, label:{ formatter:'2.5kW',color:'#ef4444', fontSize:9, position:'insideEndTop' } }
+            { yAxis:1000, lineStyle:{ color:'#22c55e', type:'dashed', width:1 }, label:{ formatter:'1kW',  color:'#22c55e', fontSize:9, position:'insideEndTop' } },
+            { yAxis:1500, lineStyle:{ color:'#eab308', type:'dashed', width:1 }, label:{ formatter:'1.5kW',color:'#eab308', fontSize:9, position:'insideEndTop' } },
+            { yAxis:2500, lineStyle:{ color:'#f97316', type:'dashed', width:1 }, label:{ formatter:'2.5kW',color:'#f97316', fontSize:9, position:'insideEndTop' } }
           ]
         }
       }]

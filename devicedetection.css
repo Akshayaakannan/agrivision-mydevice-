@@ -106,19 +106,6 @@ body, html {
 .em-tab.active { background: linear-gradient(135deg, #75B739, #288C40); color: #fff; box-shadow: 0 3px 10px rgba(40,140,64,0.28); }
 .em-ti { font-size: 1rem; }
 
-/* Notification dot on Alerts tab */
-.em-ndot {
-  display: none;
-  position: absolute;
-  top: 6px; right: 10px;
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  background: #ef4444;
-  border: 2px solid #fff;
-  animation: em-blink 1s infinite;
-}
-.em-ndot.visible { display: block; }
-
 /* ══════════════════════════════════════
    PANELS
    ══════════════════════════════════════ */
@@ -311,43 +298,6 @@ body, html {
    ALERTS PANEL  (panel-alerts)
    ══════════════════════════════════════ */
 
-/* Power Ring */
-.em-ring-wrap {
-  position: relative;
-  width: 160px; height: 160px;
-  margin: 0 auto 10px;
-}
-.em-ring-svg {
-  width: 160px; height: 160px;
-  transform: rotate(-90deg);
-}
-.em-rt {
-  fill: none;
-  stroke: #f1f5f9;
-  stroke-width: 10;
-}
-.em-rp {
-  fill: none;
-  stroke: #22c55e;
-  stroke-width: 10;
-  stroke-linecap: round;
-  stroke-dasharray: 414.69;
-  stroke-dashoffset: 414.69;
-  transition: stroke-dashoffset 0.6s ease, stroke 0.4s;
-}
-.em-ring-inner {
-  position: absolute;
-  inset: 0;
-  display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-}
-.em-ring-w { font-size: 2rem; font-weight: 900; color: #1e293b; }
-.em-ring-u { font-size: 0.72rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
-
-.em-sev-row { display:flex; align-items:center; justify-content:center; gap:8px; }
-.em-sev-icon { font-size: 1.2rem; }
-.em-sev-lbl { font-size: 0.82rem; font-weight: 700; color: #374151; }
-
 /* Threshold toggle rows */
 .em-trow {
   display: flex;
@@ -358,6 +308,7 @@ body, html {
   margin-bottom: 8px;
   border: 1px solid transparent;
 }
+.em-trow:last-child { margin-bottom: 0; }
 .em-trow-l { display:flex; align-items:center; gap:10px; }
 .em-tlabel { font-size: 0.82rem; font-weight: 700; }
 .em-trange { font-size: 0.68rem; color: #64748b; margin-top:1px; }
@@ -404,16 +355,6 @@ body, html {
   font-size: 0.8rem;
 }
 .em-sg-item span:last-child { margin-left:auto; }
-
-/* Notification log */
-.em-nrow {
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px;
-  border-bottom: 1px solid #f8fafc;
-}
-.em-nrow:last-child { border-bottom:none; }
-.em-ntitle { font-size:0.8rem; font-weight:700; }
-.em-ntime  { font-size:0.65rem; color:#94a3b8; margin-top:2px; }
 
 /* ══════════════════════════════════════
    CHART PANEL (panel-chart)
