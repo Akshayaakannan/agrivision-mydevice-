@@ -1,0 +1,766 @@
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+
+<!-- ══════════════════════════════════════════
+     ENERGY MONITOR WIDGET  — HTML TAB
+     Paste this into ThingsBoard Widget → HTML
+     ══════════════════════════════════════════ -->
+
+<div class="em-root">
+
+  <!-- ── Live Power Strip ── -->
+  <div class="em-live-strip" id="emLiveStrip">
+    <div class="em-live-left">
+      <span class="em-pulse"></span>
+      <span class="em-live-lbl">Live Power</span>
+    </div>
+    <div class="em-live-right">
+      <span class="em-live-val" id="emLiveVal">-- W</span>
+      <span class="em-live-badge" id="emLiveBadge">--</span>
+    </div>
+  </div>
+
+  <!-- ── Title ── -->
+  <div class="em-title">⚡ Energy Monitor</div>
+
+  <!-- ── Tab Bar ── -->
+  <div class="em-tabbar">
+    <button class="em-tab active" id="tab-devices" onclick="emSwitch('devices')">
+      <span class="em-ti">🏠</span>Devices
+    </button>
+    <button class="em-tab" id="tab-add" onclick="emSwitch('add')">
+      <span class="em-ti">➕</span>Add
+    </button>
+    <button class="em-tab" id="tab-alerts" onclick="emSwitch('alerts')">
+      <span class="em-ti">🔔</span>Alerts
+      <span class="em-ndot" id="emNotifDot"></span>
+    </button>
+    <button class="em-tab" id="tab-chart" onclick="emSwitch('chart')">
+      <span class="em-ti">📊</span>Chart
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       PANEL 1 — MY DEVICES
+       ══════════════════════════════════════ -->
+  <div class="em-panel active" id="panel-devices">
+    <div class="em-card">
+      <div class="em-ch">
+        My Devices
+        <span class="em-count" id="emDevCount">0</span>
+      </div>
+      <div id="emDevList"><div class="em-spinner">⏳ Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       PANEL 2 — ADD DEVICE
+       ══════════════════════════════════════ -->
+  <div class="em-panel" id="panel-add">
+    <div class="em-card">
+      <div class="em-ch">High Energy Defaults</div>
+      <div class="em-cb">
+        <p class="em-hint">Tap a device to instantly add it with typical wattage</p>
+        <div class="em-dgrid" id="emDefGrid"></div>
+      </div>
+    </div>
+    <div class="em-card">
+      <div class="em-ch">Custom Device</div>
+      <div class="em-cb">
+        <div class="em-cform">
+          <input class="em-inp" type="text" id="emCName" placeholder="Device name…" maxlength="30"/>
+          <div class="em-row2">
+            <input class="em-inp" type="number" id="emCWatts" placeholder="Watts (e.g. 1200)" min="1" max="20000"/>
+            <select class="em-sel" id="emCIcon">
+              <option value="🔌">🔌 Generic</option>
+              <option value="💡">💡 Light</option>
+              <option value="🖥️">🖥️ Screen</option>
+              <option value="🎮">🎮 Gaming</option>
+              <option value="🔊">🔊 Audio</option>
+              <option value="🌡️">🌡️ Heater</option>
+              <option value="🏊">🏊 Pump</option>
+              <option value="⚙️">⚙️ Machine</option>
+              <option value="🔋">🔋 Charger</option>
+              <option value="🌬️">🌬️ Fan</option>
+            </select>
+          </div>
+          <button class="em-btn" id="emBtnCustom">➕ Add Custom Device</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       PANEL 3 — ALERTS / NOTIFICATIONS
+       ══════════════════════════════════════ -->
+  <div class="em-panel" id="panel-alerts">
+
+    <!-- Live Power Ring -->
+    <div class="em-card">
+      <div class="em-ch">Live Power Status</div>
+      <div class="em-cb em-center">
+        <div class="em-ring-wrap">
+          <svg viewBox="0 0 160 160" class="em-ring-svg">
+            <circle class="em-rt" cx="80" cy="80" r="66"/>
+            <circle class="em-rp" cx="80" cy="80" r="66" id="emRingP"/>
+          </svg>
+          <div class="em-ring-inner">
+            <div class="em-ring-w" id="emRingW">--</div>
+            <div class="em-ring-u">Watts</div>
+          </div>
+        </div>
+        <div class="em-sev-row" id="emSevRow">
+          <span class="em-sev-icon" id="emSevIcon">⚪</span>
+          <span class="em-sev-lbl" id="emSevLbl">Reading…</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Threshold Toggles -->
+    <div class="em-card">
+      <div class="em-ch">Notification Thresholds</div>
+      <div class="em-cb">
+        <div id="emThreshList"></div>
+        <button class="em-btn mt2" id="emBtnSaveThr">💾 Save Threshold Settings</button>
+      </div>
+    </div>
+
+    <!-- Devices by Severity -->
+    <div class="em-card">
+      <div class="em-ch">Devices by Severity Range</div>
+      <div class="em-cb" id="emSevBreak"></div>
+    </div>
+
+    <!-- Notification Log -->
+    <div class="em-card">
+      <div class="em-ch">
+        Recent Alerts
+        <button class="em-btn-xs" id="emBtnClr">Clear</button>
+      </div>
+      <div id="emNLog"><div class="em-hint em-center" style="padding:14px;">No alerts yet</div></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       PANEL 4 — ANALYTICS CHART
+       ══════════════════════════════════════ -->
+  <div class="em-panel" id="panel-chart">
+    <div class="em-card">
+      <div class="em-ch">Date Range</div>
+      <div class="em-cb">
+        <div class="em-dr">
+          <div class="em-drf">
+            <label class="em-drl">From</label>
+            <input class="em-inp" type="date" id="emSD"/>
+          </div>
+          <div class="em-drf">
+            <label class="em-drl">To</label>
+            <input class="em-inp" type="date" id="emED"/>
+          </div>
+        </div>
+        <button class="em-btn" id="emBtnChart">📊 Load Chart</button>
+      </div>
+    </div>
+
+    <!-- Summary strip -->
+    <div class="em-sum-strip" id="emSumStrip" style="display:none;">
+      <div class="em-sc"><div class="em-sc-v" id="emSPeak">--</div><div class="em-sc-l">Peak Hour</div></div>
+      <div class="em-sc"><div class="em-sc-v" id="emSPW">--W</div><div class="em-sc-l">Peak Power</div></div>
+      <div class="em-sc"><div class="em-sc-v" id="emSAvg">--W</div><div class="em-sc-l">Avg Power</div></div>
+      <div class="em-sc"><div class="em-sc-v" id="emSKwh">--</div><div class="em-sc-l">Est. kWh</div></div>
+    </div>
+
+    <div class="em-card">
+      <div class="em-ch">Hourly Power Consumption</div>
+      <div class="em-cb" style="padding:8px 10px;">
+        <div id="emBarChart" style="width:100%;height:290px;"></div>
+        <div class="em-legend">
+          <span class="em-li"><span class="em-ld" style="background:#22c55e;"></span>&lt;500W Minor</span>
+          <span class="em-li"><span class="em-ld" style="background:#eab308;"></span>500–1000W</span>
+          <span class="em-li"><span class="em-ld" style="background:#f97316;"></span>1000–2500W</span>
+          <span class="em-li"><span class="em-ld" style="background:#ef4444;"></span>&gt;2500W Critical</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="em-card" id="emPeakCard" style="display:none;">
+      <div class="em-ch">⏱ Peak Times</div>
+      <div class="em-cb" id="emPeakBody"></div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="em-toast" id="emToast"></div>
+</div>
+
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONFIG  ← change DEVICE_ID and API_BASE to match yours
+// ═══════════════════════════════════════════════════════
+const EM_API       = 'https://energy-app.utech-iiot.lk/api';
+const EM_DEV_ID    = '422a2800-33cc-11f1-97e7-41e8209c1cc5';
+const KEY_DEVICES  = 'em_registered_devices';
+const KEY_NOTIF    = 'em_notification_config';
+
+// ═══════════════════════════════════════════════════════
+//  SEVERITY LEVELS
+// ═══════════════════════════════════════════════════════
+const SEV = [
+  { id:'minor',    label:'Minor',    icon:'🟢', min:0,    max:500,      color:'#22c55e', bg:'#f0fdf4', tbSev:'INDETERMINATE' },
+  { id:'moderate', label:'Moderate', icon:'🟡', min:500,  max:1000,     color:'#eab308', bg:'#fefce8', tbSev:'WARNING' },
+  { id:'major',    label:'Major',    icon:'🟠', min:1000, max:2500,     color:'#f97316', bg:'#fff7ed', tbSev:'MAJOR' },
+  { id:'critical', label:'Critical', icon:'🔴', min:2500, max:Infinity, color:'#ef4444', bg:'#fef2f2', tbSev:'CRITICAL' }
+];
+
+// ═══════════════════════════════════════════════════════
+//  DEFAULT HIGH-ENERGY DEVICE CATALOGUE
+// ═══════════════════════════════════════════════════════
+const DEFAULTS = [
+  { name:'Air Conditioner',  icon:'❄️',  watts:1500 },
+  { name:'Water Heater',     icon:'🚿',  watts:3000 },
+  { name:'Electric Oven',    icon:'🍳',  watts:2000 },
+  { name:'Washing Machine',  icon:'🫧',  watts:500  },
+  { name:'Refrigerator',     icon:'🧊',  watts:150  },
+  { name:'Microwave',        icon:'📡',  watts:1200 },
+  { name:'Electric Kettle',  icon:'☕',  watts:2000 },
+  { name:'Iron',             icon:'👔',  watts:2000 },
+  { name:'Hair Dryer',       icon:'💨',  watts:1800 },
+  { name:'Dishwasher',       icon:'🍽️', watts:1500 },
+  { name:'Television',       icon:'📺',  watts:150  },
+  { name:'Desktop PC',       icon:'🖥️', watts:300  },
+  { name:'Heat Pump',        icon:'🌡️', watts:2000 },
+  { name:'Pool Pump',        icon:'🏊',  watts:1500 },
+  { name:'Ceiling Fan',      icon:'🌀',  watts:75   },
+  { name:'Laptop',           icon:'💻',  watts:65   }
+];
+
+// ═══════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════
+let devices     = [];
+let notifCfg    = { minor:true, moderate:true, major:true, critical:true };
+let nLog        = [];
+let liveWatts   = null;
+let lastSevId   = null;
+let liveTimer   = null;
+let barChart    = null;
+
+// ═══════════════════════════════════════════════════════
+//  HELPERS — TOKEN / XHR
+// ═══════════════════════════════════════════════════════
+function getToken() {
+  try { return self.ctx?.authService?.jwtHelper?.tokenGetter() || ''; } catch(e) {}
+  return localStorage.getItem('jwt_token') || '';
+}
+
+function xhr(method, url, body, cb) {
+  const r = new XMLHttpRequest();
+  r.open(method, url, true);
+  r.setRequestHeader('X-Authorization', 'Bearer ' + getToken());
+  if (body) r.setRequestHeader('Content-Type', 'application/json');
+  r.onreadystatechange = () => { if (r.readyState === 4 && cb) cb(r.status, r.responseText); };
+  r.onerror = () => { if (cb) cb(0, ''); };
+  r.send(body ? JSON.stringify(body) : null);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SERVER ATTRIBUTE READ / WRITE
+// ═══════════════════════════════════════════════════════
+function readAttr(key, cb) {
+  xhr('GET', `${EM_API}/plugins/telemetry/DEVICE/${EM_DEV_ID}/values/attributes/SERVER_SCOPE?keys=${key}`, null, (s, t) => {
+    try {
+      const a = JSON.parse(t);
+      if (a?.length && a[0].value !== undefined) return cb(JSON.parse(a[0].value));
+    } catch(e) {}
+    cb(null);
+  });
+}
+
+function writeAttr(key, val, cb) {
+  const body = { [key]: JSON.stringify(val) };
+  xhr('POST', `${EM_API}/plugins/telemetry/DEVICE/${EM_DEV_ID}/attributes/SERVER_SCOPE`, body, (s) => {
+    if (cb) cb(s === 200);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  LIVE POWER FETCH
+// ═══════════════════════════════════════════════════════
+function fetchPower(cb) {
+  xhr('GET', `${EM_API}/plugins/telemetry/DEVICE/${EM_DEV_ID}/values/timeseries?keys=power&limit=1`, null, (s, t) => {
+    try {
+      const d = JSON.parse(t);
+      const v = d?.power?.[0]?.value;
+      return cb(v !== undefined ? parseFloat(v) : null);
+    } catch(e) { cb(null); }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  SEVERITY LOOKUP
+// ═══════════════════════════════════════════════════════
+function getSev(w) {
+  if (w === null || w === undefined) return null;
+  return SEV.find(s => w >= s.min && w < s.max) || SEV[SEV.length - 1];
+}
+
+// ═══════════════════════════════════════════════════════
+//  UPDATE LIVE STRIP  (top of page + alerts ring)
+// ═══════════════════════════════════════════════════════
+function updateLive(w) {
+  liveWatts = w;
+  const sev = getSev(w);
+
+  // Live strip
+  const vEl = document.getElementById('emLiveVal');
+  const bEl = document.getElementById('emLiveBadge');
+  const strip = document.getElementById('emLiveStrip');
+  if (vEl) vEl.textContent = w !== null ? w.toFixed(0) + ' W' : '-- W';
+  if (bEl && sev) {
+    bEl.textContent = sev.label;
+    bEl.style.background = sev.bg;
+    bEl.style.color = sev.color;
+    bEl.style.border = '1px solid ' + sev.color + '44';
+  }
+  if (strip && sev) strip.style.borderBottom = '2px solid ' + sev.color + '55';
+
+  // Alerts ring (only if panel is active)
+  const rw = document.getElementById('emRingW');
+  const rp = document.getElementById('emRingP');
+  const si = document.getElementById('emSevIcon');
+  const sl = document.getElementById('emSevLbl');
+
+  if (rw) rw.textContent = w !== null ? w.toFixed(0) : '--';
+  if (rp && w !== null) {
+    const circ = 2 * Math.PI * 66;
+    const pct  = Math.min(1, w / 3500);
+    rp.style.strokeDasharray  = circ;
+    rp.style.strokeDashoffset = circ * (1 - pct);
+    rp.style.stroke = sev ? sev.color : '#d1d5db';
+  }
+  if (si) si.textContent = sev ? sev.icon : '⚪';
+  if (sl) sl.textContent = sev
+    ? sev.label + ' (' + sev.min + '–' + (sev.max === Infinity ? '∞' : sev.max) + 'W)'
+    : 'Reading…';
+
+  // Check alerts
+  if (w !== null && sev && notifCfg[sev.id] && sev.id !== lastSevId) {
+    lastSevId = sev.id;
+    pushAlert(w, sev);
+  }
+  if (sev && sev.id !== lastSevId) lastSevId = sev.id;
+}
+
+// ═══════════════════════════════════════════════════════
+//  PUSH ALERT
+// ═══════════════════════════════════════════════════════
+function pushAlert(w, sev) {
+  const entry = {
+    ts:    Date.now(),
+    time:  new Date().toLocaleTimeString(),
+    date:  new Date().toLocaleDateString(),
+    watts: w.toFixed(0),
+    sev
+  };
+  nLog.unshift(entry);
+  if (nLog.length > 40) nLog.pop();
+
+  const dot = document.getElementById('emNotifDot');
+  if (dot) dot.classList.add('visible');
+
+  renderNLog();
+
+  // Create ThingsBoard alarm
+  const alarm = {
+    type: 'POWER_SPIKE',
+    originator: { entityType:'DEVICE', id: EM_DEV_ID },
+    severity: sev.tbSev,
+    status: 'ACTIVE_UNACK',
+    details: {
+      power: w,
+      level: sev.label,
+      message: `Power spike: ${w.toFixed(0)}W — ${sev.label}`
+    }
+  };
+  xhr('POST', `${EM_API}/alarm`, alarm, () => {});
+}
+
+// ═══════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+function emSwitch(id) {
+  ['devices','add','alerts','chart'].forEach(t => {
+    document.getElementById('tab-' + t)?.classList.toggle('active', t === id);
+    document.getElementById('panel-' + t)?.classList.toggle('active', t === id);
+  });
+  if (id === 'devices') renderDevices();
+  if (id === 'add')     renderDefGrid();
+  if (id === 'alerts')  renderAlerts();
+  if (id === 'chart')   setTimeout(renderChart, 80);
+  if (id === 'alerts') {
+    const dot = document.getElementById('emNotifDot');
+    if (dot) dot.classList.remove('visible');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  PANEL 1 — DEVICES
+// ═══════════════════════════════════════════════════════
+function renderDevices() {
+  const el  = document.getElementById('emDevList');
+  const cnt = document.getElementById('emDevCount');
+  if (!el) return;
+  if (cnt) cnt.textContent = devices.length;
+
+  if (!devices.length) {
+    el.innerHTML = `<div class="em-empty">
+      <div class="em-empty-i">🔌</div>
+      <p>No devices added yet</p>
+      <button class="em-btn" style="width:auto;padding:10px 22px;" onclick="emSwitch('add')">➕ Add Devices</button>
+    </div>`;
+    return;
+  }
+
+  const sorted = [...devices].sort((a, b) => (b.watts || 0) - (a.watts || 0));
+  el.innerHTML = sorted.map(d => {
+    const s = getSev(d.watts);
+    return `<div class="em-drow">
+      <div class="em-drow-l">
+        <div class="em-dicon" style="background:${s ? s.bg : '#f3f4f6'};">${d.icon}</div>
+        <div class="em-dinfo">
+          <div class="em-dname">${d.name}</div>
+          <div class="em-dmeta">
+            ${s ? `<span class="em-chip" style="background:${s.bg};color:${s.color};border-color:${s.color}33;">${s.icon} ${s.label}</span>` : ''}
+            <span class="em-ddate">${d.addedDate || ''}</span>
+          </div>
+        </div>
+      </div>
+      <div class="em-drow-r">
+        <div class="em-dwatts" style="color:${s ? s.color : '#888'};">${d.watts != null ? d.watts.toFixed(0) : '--'}W</div>
+        <button class="em-del" onclick="delDevice('${d.name}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function delDevice(name) {
+  if (!confirm('Remove "' + name + '" from your devices?')) return;
+  devices = devices.filter(d => d.name !== name);
+  writeAttr(KEY_DEVICES, devices, ok => {
+    toast(ok ? '✓ Removed' : '⚠ Save failed', ok);
+    renderDevices();
+    renderDefGrid();
+    renderSevBreak();
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  PANEL 2 — ADD DEVICE
+// ═══════════════════════════════════════════════════════
+function hasDevice(name) {
+  return devices.some(d => d.name.toLowerCase() === name.toLowerCase());
+}
+
+function renderDefGrid() {
+  const el = document.getElementById('emDefGrid');
+  if (!el) return;
+  el.innerHTML = DEFAULTS.map(d => {
+    const s   = getSev(d.watts);
+    const reg = hasDevice(d.name);
+    return `<div class="em-dcard ${reg ? 'em-dcard-done' : ''}"
+          onclick="${reg ? '' : "addDefault('" + d.name + "')"}"
+          style="${reg ? 'cursor:default;opacity:0.65;' : ''}">
+      <span class="em-dc-icon">${d.icon}</span>
+      <span class="em-dc-name">${d.name}</span>
+      <span class="em-dc-w" style="color:${s ? s.color : '#888'};">${d.watts}W</span>
+      ${reg
+        ? '<span class="em-dc-done">✓</span>'
+        : `<span class="em-chip em-dc-sev" style="background:${s ? s.bg : '#f3f4f6'};color:${s ? s.color : '#888'};border-color:${s ? s.color + '33' : '#ccc'};">${s ? s.icon : ''} ${s ? s.label : ''}</span>`
+      }
+    </div>`;
+  }).join('');
+}
+
+function addDefault(name) {
+  const def = DEFAULTS.find(d => d.name === name);
+  if (!def || hasDevice(name)) return;
+  devices.push({ name: def.name, icon: def.icon, watts: def.watts, addedDate: new Date().toLocaleDateString() });
+  writeAttr(KEY_DEVICES, devices, ok => {
+    toast(ok ? '✓ ' + def.name + ' added' : '⚠ Save failed', ok);
+    renderDefGrid();
+    renderSevBreak();
+  });
+}
+
+document.getElementById('emBtnCustom')?.addEventListener('click', () => {
+  const name  = document.getElementById('emCName').value.trim();
+  const watts = parseFloat(document.getElementById('emCWatts').value);
+  const icon  = document.getElementById('emCIcon').value;
+  if (!name)          return toast('Enter a device name', false);
+  if (!watts || watts <= 0) return toast('Enter valid wattage', false);
+  if (hasDevice(name)) return toast('Device already exists', false);
+  devices.push({ name, icon, watts, addedDate: new Date().toLocaleDateString() });
+  document.getElementById('emCName').value  = '';
+  document.getElementById('emCWatts').value = '';
+  writeAttr(KEY_DEVICES, devices, ok => {
+    toast(ok ? '✓ ' + name + ' added' : '⚠ Save failed', ok);
+    renderDevices();
+    renderSevBreak();
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+//  PANEL 3 — ALERTS
+// ═══════════════════════════════════════════════════════
+function renderAlerts() {
+  updateLive(liveWatts);
+  renderThresh();
+  renderSevBreak();
+  renderNLog();
+}
+
+function renderThresh() {
+  const el = document.getElementById('emThreshList');
+  if (!el) return;
+  el.innerHTML = SEV.map(s => `
+    <div class="em-trow" style="border-left:3px solid ${s.color};background:${s.bg};">
+      <div class="em-trow-l">
+        <span style="font-size:1.3rem;">${s.icon}</span>
+        <div>
+          <div class="em-tlabel" style="color:${s.color};">${s.label}</div>
+          <div class="em-trange">${s.min}W – ${s.max === Infinity ? '∞' : s.max + 'W'}</div>
+        </div>
+      </div>
+      <label class="em-tog">
+        <input type="checkbox" id="thr-${s.id}" ${notifCfg[s.id] ? 'checked' : ''}/>
+        <span class="em-tog-s" style="--c:${s.color};"></span>
+      </label>
+    </div>`).join('');
+}
+
+function renderSevBreak() {
+  const el = document.getElementById('emSevBreak');
+  if (!el) return;
+  if (!devices.length) { el.innerHTML = '<div class="em-hint">No devices registered yet.</div>'; return; }
+
+  const html = SEV.map(s => {
+    const grp = devices.filter(d => { const sv = getSev(d.watts); return sv && sv.id === s.id; });
+    if (!grp.length) return '';
+    return `<div class="em-sg">
+      <div class="em-sg-h" style="color:${s.color};">
+        ${s.icon} ${s.label}
+        <span class="em-chip" style="background:${s.bg};color:${s.color};border-color:${s.color}33;">${grp.length}</span>
+      </div>
+      <div class="em-sg-body">
+        ${grp.map(d => `<div class="em-sg-item" style="border-color:${s.color}30;">
+          ${d.icon} <span>${d.name}</span>
+          <span style="color:${s.color};font-weight:700;">${d.watts}W</span>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  el.innerHTML = html || '<div class="em-hint">No devices categorized.</div>';
+}
+
+function renderNLog() {
+  const el = document.getElementById('emNLog');
+  if (!el) return;
+  if (!nLog.length) { el.innerHTML = '<div class="em-hint em-center" style="padding:14px;">No alerts yet</div>'; return; }
+  el.innerHTML = nLog.map(n => `
+    <div class="em-nrow" style="border-left:3px solid ${n.sev.color};background:${n.sev.bg};">
+      <span style="font-size:1.2rem;">${n.sev.icon}</span>
+      <div style="flex:1;">
+        <div class="em-ntitle">${n.sev.label} — ${n.watts}W</div>
+        <div class="em-ntime">${n.date} · ${n.time}</div>
+      </div>
+      <span class="em-chip" style="background:${n.sev.bg};color:${n.sev.color};border-color:${n.sev.color}33;">${n.sev.label}</span>
+    </div>`).join('');
+}
+
+document.getElementById('emBtnSaveThr')?.addEventListener('click', () => {
+  SEV.forEach(s => {
+    const cb = document.getElementById('thr-' + s.id);
+    if (cb) notifCfg[s.id] = cb.checked;
+  });
+  writeAttr(KEY_NOTIF, notifCfg, ok => toast(ok ? '✓ Settings saved' : '⚠ Save failed', ok));
+});
+
+document.getElementById('emBtnClr')?.addEventListener('click', () => {
+  nLog = []; lastSevId = null; renderNLog();
+});
+
+// ═══════════════════════════════════════════════════════
+//  PANEL 4 — ANALYTICS CHART
+// ═══════════════════════════════════════════════════════
+function initDates() {
+  const t = new Date();
+  const f = new Date(t); f.setDate(t.getDate() - 6);
+  const fmt = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  document.getElementById('emSD').value = fmt(f);
+  document.getElementById('emED').value = fmt(t);
+}
+
+function fetchHourly(startTs, endTs, cb) {
+  const url = `${EM_API}/plugins/telemetry/DEVICE/${EM_DEV_ID}/values/timeseries`
+    + `?keys=power&startTs=${startTs}&endTs=${endTs}&interval=3600000&agg=AVG&limit=1000`;
+  xhr('GET', url, null, (s, t) => {
+    try {
+      const d  = JSON.parse(t);
+      const pts = (d.power || [])
+        .map(p => ({ ts: parseInt(p.ts), v: parseFloat(p.value) }))
+        .sort((a, b) => a.ts - b.ts);
+      cb(pts);
+    } catch(e) { cb([]); }
+  });
+}
+
+function barColor(w) { const s = getSev(w); return s ? s.color : '#94a3b8'; }
+
+function renderChart() {
+  const sv = document.getElementById('emSD').value;
+  const ev = document.getElementById('emED').value;
+  if (!sv || !ev) return;
+  const startTs = new Date(sv).getTime();
+  const endTs   = new Date(ev).getTime() + 86399999;
+
+  if (!barChart) barChart = echarts.init(document.getElementById('emBarChart'));
+  barChart.showLoading({ text:'Loading…', color:'#288C40', maskColor:'rgba(255,255,255,0.8)' });
+
+  fetchHourly(startTs, endTs, pts => {
+    barChart.hideLoading();
+    if (!pts.length) {
+      barChart.clear();
+      document.getElementById('emBarChart').innerHTML =
+        '<div style="text-align:center;padding:80px 0;color:#aaa;">No data for this range</div>';
+      return;
+    }
+
+    const labels = pts.map(p => {
+      const d = new Date(p.ts);
+      return (d.getMonth()+1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2,'0') + 'h';
+    });
+    const vals  = pts.map(p => p.v);
+    const max   = Math.max(...vals);
+    const avg   = vals.reduce((a, b) => a + b, 0) / vals.length;
+    const peakI = vals.indexOf(max);
+    const kwh   = vals.reduce((a, b) => a + b / 1000, 0);
+
+    // Stats
+    document.getElementById('emSPeak').textContent = labels[peakI] || '--';
+    document.getElementById('emSPW').textContent   = max.toFixed(0) + 'W';
+    document.getElementById('emSAvg').textContent  = avg.toFixed(0) + 'W';
+    document.getElementById('emSKwh').textContent  = kwh.toFixed(2);
+    document.getElementById('emSumStrip').style.display = 'grid';
+
+    // Peak table
+    const sorted5 = pts.map((p, i) => ({ l: labels[i], v: p.v })).sort((a,b) => b.v - a.v).slice(0, 5);
+    const peakCard = document.getElementById('emPeakCard');
+    const peakBody = document.getElementById('emPeakBody');
+    if (peakCard && peakBody) {
+      peakCard.style.display = 'block';
+      peakBody.innerHTML = sorted5.map((p, i) => {
+        const s = getSev(p.v);
+        return `<div class="em-pk-row">
+          <span class="em-pk-rank" style="background:${s ? s.color : '#888'};">#${i+1}</span>
+          <span class="em-pk-lbl">${p.l}</span>
+          <span class="em-pk-w" style="color:${s ? s.color : '#333'};">${p.v.toFixed(0)}W</span>
+          ${s ? `<span class="em-chip" style="background:${s.bg};color:${s.color};border-color:${s.color}33;">${s.icon} ${s.label}</span>` : ''}
+        </div>`;
+      }).join('');
+    }
+
+    // ECharts config
+    barChart.setOption({
+      animation: true,
+      grid: { left:52, right:12, top:20, bottom:70 },
+      tooltip: {
+        trigger: 'axis',
+        formatter: p => {
+          const pt = p[0]; if (!pt) return '';
+          const s = getSev(pt.value);
+          return `<b>${pt.name}</b><br/>${pt.value.toFixed(1)} W${s ? '<br/>' + s.icon + ' ' + s.label : ''}`;
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: labels,
+        axisLabel: { fontSize:9, rotate:45, interval: Math.max(0, Math.floor(labels.length / 8) - 1) }
+      },
+      yAxis: {
+        type: 'value',
+        name: 'W',
+        nameTextStyle: { fontSize:10 },
+        axisLabel: { fontSize:10 }
+      },
+      series: [{
+        type: 'bar',
+        data: vals.map((v, i) => ({
+          value: v,
+          itemStyle: { color: barColor(v), borderRadius: [3,3,0,0] }
+        })),
+        barMaxWidth: 22,
+        emphasis: { itemStyle: { opacity: 0.85 } },
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          data: [
+            { yAxis:500,  lineStyle:{ color:'#22c55e', type:'dashed', width:1 }, label:{ formatter:'500W', color:'#22c55e', fontSize:9, position:'insideEndTop' } },
+            { yAxis:1000, lineStyle:{ color:'#eab308', type:'dashed', width:1 }, label:{ formatter:'1kW',  color:'#eab308', fontSize:9, position:'insideEndTop' } },
+            { yAxis:1500, lineStyle:{ color:'#f97316', type:'dashed', width:1 }, label:{ formatter:'1.5kW',color:'#f97316', fontSize:9, position:'insideEndTop' } },
+            { yAxis:2500, lineStyle:{ color:'#ef4444', type:'dashed', width:1 }, label:{ formatter:'2.5kW',color:'#ef4444', fontSize:9, position:'insideEndTop' } }
+          ]
+        }
+      }]
+    });
+  });
+}
+
+document.getElementById('emBtnChart')?.addEventListener('click', renderChart);
+window.addEventListener('resize', () => { if (barChart) barChart.resize(); });
+
+// ═══════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════
+function toast(msg, ok) {
+  const el = document.getElementById('emToast');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.background = ok ? '#22c55e' : '#ef4444';
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOOT
+// ═══════════════════════════════════════════════════════
+function boot() {
+  initDates();
+
+  document.getElementById('emDevList').innerHTML =
+    '<div class="em-spinner">⏳ Loading from server…</div>';
+
+  readAttr(KEY_DEVICES, devs => {
+    if (Array.isArray(devs)) devices = devs;
+    readAttr(KEY_NOTIF, cfg => {
+      if (cfg && typeof cfg === 'object') notifCfg = Object.assign(notifCfg, cfg);
+      renderDevices();
+      renderDefGrid();
+    });
+  });
+
+  // Live polling — every 30 s
+  function poll() { fetchPower(updateLive); }
+  poll();
+  liveTimer = setInterval(poll, 30000);
+
+  // Hide ThingsBoard footer
+  (function hide() {
+    const f = document.querySelector('section.tb-powered-by-footer');
+    if (f) f.style.display = 'none'; else setTimeout(hide, 500);
+  })();
+}
+
+boot();
+</script>
